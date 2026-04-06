@@ -496,8 +496,9 @@ class DrawArea {
     overlay.engine.on('tntBang', () => {
       console.log('[TNT] tntBang');
       this.#stateMachine.clearCanvas();
-      this.#stateMachine.currentColor = '#1a1a2e';
-      this.#backgroundRect.setAttribute('fill', '#1a1a2e');
+      const newColor = this.#stateMachine.currentColor;
+      this.#stateMachine.currentColor = newColor;
+      this.#backgroundRect.setAttribute('fill', newColor);
     });
   }
 }
