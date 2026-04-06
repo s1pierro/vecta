@@ -71,6 +71,8 @@ var Application = (function() {
     
     this.touchOverlay = new TouchOverlay(this._drawArea.touchOverlayElement, {
       dist: 0,
+      tappingToPressingFrontier: 600,
+      pressingToLongPressingFrontier: 1950,
       contactSize: 24,
       cursorSize: 14,
       rodEnabled: true,
