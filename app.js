@@ -89,7 +89,32 @@ var Application = (function() {
     this.statesMachine.on('sizeChange', function() { self._drawArea._redraw(); });
     this.statesMachine.on('clearCanvas', function() { self._drawArea._redraw(); });
 
+    this._updateStatusBar();
+
+    this.statesMachine.on('modeChange', function() { self._updateStatusBar(); });
+    this.statesMachine.on('toolChange', function() { self._updateStatusBar(); });
+    this.statesMachine.on('colorChange', function() { self._updateStatusBar(); });
+    this.statesMachine.on('sizeChange', function() { self._updateStatusBar(); });
+    this.statesMachine.on('selectedPathChange', function() { self._updateStatusBar(); });
+
     console.log('Vecta initialized');
+  };
+
+  Application.prototype._updateStatusBar = function() {
+    var statusMode = document.getElementById('statusMode');
+    var statusTool = document.getElementById('statusTool');
+    var statusColor = document.getElementById('statusColor');
+    var statusSize = document.getElementById('statusSize');
+    var statusSelected = document.getElementById('statusSelected');
+    
+    if (statusMode) statusMode.textContent = this.statesMachine.mode;
+    if (statusTool) statusTool.textContent = this.statesMachine.currentTool;
+    if (statusColor) statusColor.textContent = this.statesMachine.currentColor;
+    if (statusSize) statusSize.textContent = this.statesMachine.currentSize;
+    if (statusSelected) {
+      var selected = this.statesMachine.selectedPath;
+      statusSelected.textContent = selected ? (selected.color + ', ' + selected.size + 'px') : '-';
+    }
   };
 
   Object.defineProperty(Application.prototype, 'drawArea', {
