@@ -4,6 +4,7 @@ var APP_VERSION = '0.1';
 var StateMachine = (function() {
   function StateMachine() {
     this._state = {
+      mode: 'drawingTool',
       currentTool: 'draw',
       currentColor: '#ffffff',
       currentSize: 8,
@@ -20,6 +21,11 @@ var StateMachine = (function() {
       for (var k in this._state) s[k] = this._state[k];
       return s;
     }
+  });
+
+  Object.defineProperty(StateMachine.prototype, 'mode', {
+    get: function() { return this._state.mode; },
+    set: function(v) { this._state.mode = v; this._emit('modeChange', v); }
   });
 
   Object.defineProperty(StateMachine.prototype, 'currentTool', {
@@ -71,6 +77,12 @@ var StateMachine = (function() {
   StateMachine.prototype.clearCanvas = function() {
     this._state.paths = [];
     this._emit('clearCanvas');
+  };
+
+  StateMachine.prototype.setMode = function(newMode) {
+    this._state.currentPath = null;
+    this._state.mode = newMode;
+    this._emit('modeChange', newMode);
   };
 
   return StateMachine;
@@ -217,6 +229,13 @@ var CorePanel = (function() {
     this.el.querySelectorAll('.panel-tool-btn').forEach(function(b) { b.classList.remove('active'); });
     this.el.querySelector('[data-tool="' + tool + '"]').classList.add('active');
     this.stateMachine.currentTool = tool;
+    
+    var modeMap = {
+      draw: 'drawingTool',
+      select: 'selection',
+      pan: 'drawingTool'
+    };
+    this.stateMachine.setMode(modeMap[tool] || 'drawingTool');
   };
 
   CorePanel.prototype._selectColor = function(color) {
@@ -367,12 +386,14 @@ var DrawArea = (function() {
     this.stateMachine.on('selectedPathChange', function() { self._redraw(); });
 
     overlay.engine.on('cursorActivate', function(e) {
+      if (self.stateMachine.mode !== 'drawingTool') return;
       console.log('[TNT] cursorActivate:', e.touchX, e.touchY);
       var pt = self._screenToDoc(e.touchX, e.touchY);
       self.stateMachine.currentPath = [{ x: pt.x, y: pt.y }];
     });
 
     overlay.engine.on('cursorMove', function(e) {
+      if (self.stateMachine.mode !== 'drawingTool') return;
       var path = self.stateMachine.currentPath;
       if (path) {
         var pt = self._screenToDoc(e.touchX, e.touchY);
@@ -382,6 +403,7 @@ var DrawArea = (function() {
     });
 
     overlay.engine.on('cursorRelease', function(e) {
+      if (self.stateMachine.mode !== 'drawingTool') return;
       console.log('[TNT] cursorRelease');
       var path = self.stateMachine.currentPath;
       if (path && path.length > 1) {
@@ -396,7 +418,7 @@ var DrawArea = (function() {
 
     overlay.engine.on('tap', function(e) {
       console.log('[TNT] tap:', e.x, e.y);
-      if (self.stateMachine.currentTool === 'select') {
+      if (self.stateMachine.mode === 'selection') {
         var pt = self._screenToDoc(e.x, e.y);
         var found = self._findPathAtPoint(pt.x, pt.y);
         self.stateMachine.selectedPath = found || null;
