@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
+  <script type="text/javascript">eruda.init();</script>
+  <meta name="theme-color" content="#1a1a2e">
+  <meta name="description" content="Vecta - Application de dessin vectoriel">
+  <title>Vecta</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/svg+xml" href="icon.svg">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #1a1a2e;
+      font-family: system-ui, sans-serif;
+      touch-action: none;
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    #app {
+      width: 100%;
+      height: 100%;
+      position: relative;
+    }
+    #canvasContainer {
+      position: absolute;
+      top: 0;
+      left: 60px;
+      right: 0;
+      bottom: 0;
+    }
+    #canvasContainer canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    #panel {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 60px;
+      height: 100%;
+      background: rgba(30, 30, 50, 0.9);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 12px 0;
+      gap: 12px;
+      z-index: 100;
+    }
+    #panel.hidden {
+      display: none;
+    }
+    .panel-tool-btn {
+      width: 44px;
+      height: 44px;
+      border-radius: 8px;
+      border: 2px solid rgba(255, 255, 255, 0.2);
+      background: rgba(255, 255, 255, 0.05);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    .panel-tool-btn.active {
+      border-color: #4fc3f7;
+      background: rgba(79, 195, 247, 0.2);
+    }
+    .panel-tool-btn svg {
+      width: 24px;
+      height: 24px;
+      stroke: #fff;
+      fill: none;
+      stroke-width: 2;
+    }
+    .panel-color-btn {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+    }
+    .panel-color-btn.active {
+      border-color: #fff;
+      box-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
+    }
+    #panelColors {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      align-items: center;
+    }
+    .panel-sep {
+      width: 32px;
+      height: 1px;
+      background: rgba(255, 255, 255, 0.2);
+    }
+    #panelSizes {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      align-items: center;
+    }
+    .panel-size-btn {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+    .panel-size-btn.active {
+      background: rgba(79, 195, 247, 0.4);
+      border-color: #4fc3f7;
+    }
+    .panel-toggle-btn {
+      width: 44px;
+      height: 44px;
+      border-radius: 8px;
+      border: 2px solid rgba(255, 255, 255, 0.2);
+      background: rgba(255, 255, 255, 0.05);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    #togglePanelBtn {
+      margin-top: auto;
+    }
+    #fullscreenBtn {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      width: 44px;
+      height: 44px;
+      border-radius: 8px;
+      border: 2px solid rgba(255, 255, 255, 0.2);
+      background: rgba(255, 255, 255, 0.05);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      z-index: 100;
+    }
+    #fullscreenBtn svg {
+      width: 24px;
+      height: 24px;
+      stroke: #fff;
+      fill: none;
+      stroke-width: 2;
+    }
+    </style>
+</head>
+<body>
+  <div id="app">
+    <div id="panel">
+      <button id="togglePanelBtn" class="panel-toggle-btn" title="Afficher/Masquer panneau">
+        <svg viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7"/></svg>
+      </button>
+      <div id="panelTools">
+        <button class="panel-tool-btn active" data-tool="draw">
+          <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z"/></svg>
+        </button>
+        <button class="panel-tool-btn" data-tool="select">
+          <svg viewBox="0 0 24 24"><path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/></svg>
+        </button>
+        <button class="panel-tool-btn" data-tool="pan">
+          <svg viewBox="0 0 24 24"><path d="M5 9l-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20"/></svg>
+        </button>
+      </div>
+      <div class="panel-sep"></div>
+      <div id="panelColors">
+        <button class="panel-color-btn active" data-color="#ffffff" style="background:#ffffff"></button>
+        <button class="panel-color-btn" data-color="#ff5252" style="background:#ff5252"></button>
+        <button class="panel-color-btn" data-color="#4fc3f7" style="background:#4fc3f7"></button>
+        <button class="panel-color-btn" data-color="#69f0ae" style="background:#69f0ae"></button>
+        <button class="panel-color-btn" data-color="#ffd54f" style="background:#ffd54f"></button>
+        <button class="panel-color-btn" data-color="#ba68c8" style="background:#ba68c8"></button>
+        <button class="panel-color-btn" data-color="#ff9800" style="background:#ff9800"></button>
+        <button class="panel-color-btn" data-color="#212121" style="background:#212121"></button>
+      </div>
+      <div class="panel-sep"></div>
+      <div id="panelSizes">
+        <button class="panel-size-btn" data-size="2"></button>
+        <button class="panel-size-btn" data-size="4"></button>
+        <button class="panel-size-btn active" data-size="8"></button>
+        <button class="panel-size-btn" data-size="16"></button>
+      </div>
+    </div>
+    <div id="canvasContainer">
+      <canvas id="canvas"></canvas>
+      <button id="fullscreenBtn" title="Plein écran">
+        <svg class="expand-icon" viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/></svg>
+        <svg class="compress-icon" viewBox="0 0 24 24" style="display:none"><path d="M8 3v3a2 2 0 01-2 2H3m18 0h-3a2 2 0 01-2-2V3m0 18v-3a2 2 0 012-2h3M3 16h3a2 2 0 012 2v3"/></svg>
+      </button>
+    </div>
+  </div>
+  <script src="tnt.js"></script>
+  <script>
+    const canvasContainer = document.getElementById('canvasContainer');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+
+    function resizeCanvas() {
+      const w = canvasContainer.clientWidth;
+      const h = canvasContainer.clientHeight;
+      canvas.width = w * window.devicePixelRatio;
+      canvas.height = h * window.devicePixelRatio;
+      ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+    }
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+
+    const overlay = new TouchOverlay(document.getElementById('canvasContainer'), {
+      dist: 0,
+      contactSize: 24,
+      cursorSize: 14,
+      rodEnabled: true,
+      pulseEnabled: true
+    });
+
+    class TouchPanel {
+      constructor(overlay) {
+        this.overlay = overlay;
+        this.el = document.getElementById('panel');
+        this._visible = true;
+        
+        this._bindEvents();
+      }
+
+      _bindEvents() {
+        this.overlay.engine.on('tntBang', () => this.toggle());
+      }
+
+      isVisible() {
+        return this._visible;
+      }
+
+      toggle() {
+        this._visible = !this._visible;
+        this.el.classList.toggle('hidden', !this._visible);
+        canvasContainer.style.left = this._visible ? '60px' : '0';
+      }
+
+      show() {
+        this._visible = true;
+        this.el.classList.remove('hidden');
+        canvasContainer.style.left = '60px';
+      }
+
+      hide() {
+        this._visible = false;
+        this.el.classList.add('hidden');
+        canvasContainer.style.left = '0';
+      }
+    }
+
+    const panel = new TouchPanel(overlay);
+
+    let paths = [];
+    let currentPath = null;
+    let currentTool = 'draw';
+    let currentColor = '#ffffff';
+    let currentSize = 8;
+
+    function draw() {
+      ctx.clearRect(0, 0, canvasContainer.clientWidth, canvasContainer.clientHeight);
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+
+      paths.forEach(path => {
+        if (path.points.length < 2) return;
+        ctx.strokeStyle = path.color;
+        ctx.lineWidth = path.size;
+        ctx.beginPath();
+        ctx.moveTo(path.points[0].x, path.points[0].y);
+        for (let i = 1; i < path.points.length; i++) {
+          ctx.lineTo(path.points[i].x, path.points[i].y);
+        }
+        ctx.stroke();
+      });
+
+      if (currentPath && currentPath.length >= 2) {
+        ctx.strokeStyle = currentColor;
+        ctx.lineWidth = currentSize;
+        ctx.beginPath();
+        ctx.moveTo(currentPath[0].x, currentPath[0].y);
+        for (let i = 1; i < currentPath.length; i++) {
+          ctx.lineTo(currentPath[i].x, currentPath[i].y);
+        }
+        ctx.stroke();
+      }
+    }
+
+    document.querySelectorAll('.panel-tool-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.panel-tool-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentTool = btn.dataset.tool;
+        console.log('Tool:', currentTool);
+      });
+    });
+
+    document.querySelectorAll('.panel-color-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.panel-color-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentColor = btn.dataset.color;
+        draw();
+        console.log('Color:', currentColor);
+      });
+    });
+
+    document.querySelectorAll('.panel-size-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.panel-size-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentSize = parseInt(btn.dataset.size);
+        draw();
+        console.log('Size:', currentSize);
+      });
+    });
+
+    document.getElementById('togglePanelBtn').addEventListener('click', () => {
+      panel.toggle();
+    });
+
+    const fullscreenBtn = document.getElementById('fullscreenBtn');
+    const expandIcon = fullscreenBtn.querySelector('.expand-icon');
+    const compressIcon = fullscreenBtn.querySelector('.compress-icon');
+
+    fullscreenBtn.addEventListener('click', () => {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen();
+      } else {
+        document.exitFullscreen();
+      }
+    });
+
+    document.addEventListener('fullscreenchange', () => {
+      if (document.fullscreenElement) {
+        expandIcon.style.display = 'none';
+        compressIcon.style.display = 'block';
+      } else {
+        expandIcon.style.display = 'block';
+        compressIcon.style.display = 'none';
+      }
+    });
+
+    overlay.engine.on('tap', e => {
+      console.log('Tap:', e.x, e.y);
+    });
+
+    overlay.engine.on('cursorActivate', e => {
+      currentPath = [{ x: e.touchX, y: e.touchY }];
+      draw();
+    });
+
+    overlay.engine.on('cursorMove', e => {
+      if (currentPath) {
+        currentPath.push({ x: e.touchX, y: e.touchY });
+        draw();
+      }
+    });
+
+    overlay.engine.on('cursorRelease', e => {
+      if (currentPath && currentPath.length > 1) {
+        paths.push({
+          points: currentPath,
+          color: currentColor,
+          size: currentSize
+        });
+      }
+      currentPath = null;
+      draw();
+    });
+
+    console.log('Vecta initialized with TNT.js');
+    console.log('TouchOverlay:', overlay);
+    console.log('TouchEngine:', overlay.engine);
+  </script>
+</body>
+</html>
