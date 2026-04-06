@@ -1,4 +1,3 @@
-console.log('=== VECTA CORE.JS LOADING ===');
 var APP_NAME = 'Vecta';
 var APP_VERSION = '0.1';
 
@@ -9,8 +8,7 @@ var StateMachine = (function() {
       currentColor: '#ffffff',
       currentSize: 8,
       paths: [],
-      currentPath: null,
-      panelVisible: true
+      currentPath: null
     };
     this._listeners = {};
   }
@@ -48,19 +46,9 @@ var StateMachine = (function() {
     set: function(v) { this._state.currentPath = v; this._emit('currentPathChange', v); }
   });
 
-  Object.defineProperty(StateMachine.prototype, 'panelVisible', {
-    get: function() { return this._state.panelVisible; },
-    set: function(v) { this._state.panelVisible = v; this._emit('panelVisibilityChange', v); }
-  });
-
   StateMachine.prototype.addPath = function(path) {
     this._state.paths.push(path);
     this._emit('pathsChange', this._state.paths);
-  };
-
-  StateMachine.prototype.togglePanel = function() {
-    this._state.panelVisible = !this._state.panelVisible;
-    this._emit('panelVisibilityChange', this._state.panelVisible);
   };
 
   StateMachine.prototype.on = function(event, callback) {
@@ -86,9 +74,11 @@ var CorePanel = (function() {
   CorePanel.prototype.buildDom = function(container) {
     var panel = document.createElement('div');
     panel.id = 'corePanel';
+    var self = this;
 
-    var header = document.createElement('div');
-    header.className = 'panel-header';
+    // Section Header
+    var sectionHeader = document.createElement('div');
+    sectionHeader.className = 'panel-section panel-section-header';
 
     var fullscreenBtn = document.createElement('button');
     fullscreenBtn.id = 'fullscreenBtn';
@@ -96,7 +86,6 @@ var CorePanel = (function() {
     fullscreenBtn.title = 'Plein ecran';
     fullscreenBtn.innerHTML = '<svg class="expand-icon" viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/></svg>' +
       '<svg class="compress-icon" viewBox="0 0 24 24" style="display:none"><path d="M8 3v3a2 2 0 01-2 2H3m18 0h-3a2 2 0 01-2-2V3m0 18v-3a2 2 0 012-2h3M3 16h3a2 2 0 012 2v3"/></svg>';
-    var self = this;
     fullscreenBtn.addEventListener('click', function() {
       if (!document.fullscreenElement) {
         document.documentElement.requestFullscreen();
@@ -109,19 +98,18 @@ var CorePanel = (function() {
     appInfo.className = 'panel-app-info';
     appInfo.innerHTML = '<span class="app-name">' + APP_NAME + '</span><span class="app-version">' + APP_VERSION + '</span>';
 
-    var toggleBtn = document.createElement('button');
-    toggleBtn.id = 'togglePanelBtn';
-    toggleBtn.className = 'panel-btn';
-    toggleBtn.title = 'Afficher/Masquer panneau';
-    toggleBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7"/></svg>';
-    toggleBtn.addEventListener('click', function() {
-      self.stateMachine.togglePanel();
-    });
+    sectionHeader.appendChild(fullscreenBtn);
+    sectionHeader.appendChild(appInfo);
+    panel.appendChild(sectionHeader);
 
-    header.appendChild(fullscreenBtn);
-    header.appendChild(appInfo);
-    header.appendChild(toggleBtn);
-    panel.appendChild(header);
+    // Separator 1
+    var sep1 = document.createElement('div');
+    sep1.className = 'panel-sep';
+    panel.appendChild(sep1);
+
+    // Section Tools
+    var sectionTool = document.createElement('div');
+    sectionTool.className = 'panel-section panel-section-tool';
 
     var tools = document.createElement('div');
     tools.id = 'panelTools';
@@ -139,11 +127,17 @@ var CorePanel = (function() {
       btn.addEventListener('click', function() { self._selectTool(tool); });
       tools.appendChild(btn);
     });
-    panel.appendChild(tools);
+    sectionTool.appendChild(tools);
+    panel.appendChild(sectionTool);
 
-    var sep1 = document.createElement('div');
-    sep1.className = 'panel-sep';
-    panel.appendChild(sep1);
+    // Separator 2
+    var sep2 = document.createElement('div');
+    sep2.className = 'panel-sep';
+    panel.appendChild(sep2);
+
+    // Section Colors
+    var sectionColors = document.createElement('div');
+    sectionColors.className = 'panel-section panel-section-colors';
 
     var colors = document.createElement('div');
     colors.id = 'panelColors';
@@ -156,11 +150,17 @@ var CorePanel = (function() {
       btn.addEventListener('click', function() { self._selectColor(color); });
       colors.appendChild(btn);
     });
-    panel.appendChild(colors);
+    sectionColors.appendChild(colors);
+    panel.appendChild(sectionColors);
 
-    var sep2 = document.createElement('div');
-    sep2.className = 'panel-sep';
-    panel.appendChild(sep2);
+    // Separator 3
+    var sep3 = document.createElement('div');
+    sep3.className = 'panel-sep';
+    panel.appendChild(sep3);
+
+    // Section Sizes
+    var sectionSizes = document.createElement('div');
+    sectionSizes.className = 'panel-section panel-section-sizes';
 
     var sizes = document.createElement('div');
     sizes.id = 'panelSizes';
@@ -172,15 +172,11 @@ var CorePanel = (function() {
       btn.addEventListener('click', function() { self._selectSize(size); });
       sizes.appendChild(btn);
     });
-    panel.appendChild(sizes);
+    sectionSizes.appendChild(sizes);
+    panel.appendChild(sectionSizes);
 
     this.el = panel;
     container.appendChild(panel);
-
-    var panelEl = panel;
-    this.stateMachine.on('panelVisibilityChange', function(visible) {
-      panelEl.classList.toggle('hidden', !visible);
-    });
 
     document.addEventListener('fullscreenchange', function() {
       var expandIcon = fullscreenBtn.querySelector('.expand-icon');
@@ -260,7 +256,6 @@ var DrawArea = (function() {
     if (!this.el || !this.canvas) return;
     var w = this.el.clientWidth;
     var h = this.el.clientHeight;
-    console.log('Canvas resize:', w, 'x', h);
     this.canvas.width = w * window.devicePixelRatio;
     this.canvas.height = h * window.devicePixelRatio;
     this.ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
