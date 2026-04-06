@@ -16,7 +16,10 @@ class StateMachine {
       currentSize: 8,
       paths: [],
       currentPath: null,
-      selectedPath: null
+      selectedPath: null,
+      scale: 1,
+      panX: 0,
+      panY: 0
     };
     this.#listeners = {};
     this.#saveState();
@@ -48,6 +51,15 @@ class StateMachine {
 
   get selectedPath() { return this.#state.selectedPath; }
   set selectedPath(v) { this.#state.selectedPath = v; this.#emit('selectedPathChange', v); }
+
+  get scale() { return this.#state.scale; }
+  set scale(v) { this.#state.scale = v; this.#emit('zoomChange', v); }
+
+  get panX() { return this.#state.panX; }
+  set panX(v) { this.#state.panX = v; this.#emit('zoomChange', v); }
+
+  get panY() { return this.#state.panY; }
+  set panY(v) { this.#state.panY = v; this.#emit('zoomChange', v); }
 
   on(event, callback) {
     if (!this.#listeners[event]) this.#listeners[event] = [];
@@ -136,6 +148,13 @@ class StateMachine {
     this.#state.mode = newMode;
     this.#emit('modeChange', newMode);
   }
+
+  resetZoom() {
+    this.#state.scale = 1;
+    this.#state.panX = 0;
+    this.#state.panY = 0;
+    this.#emit('zoomChange', this.#state);
+  }
 }
 
 class CorePanel {
@@ -196,6 +215,15 @@ class CorePanel {
       this.#stateMachine.redo();
     });
 
+    const resetZoomBtn = document.createElement('button');
+    resetZoomBtn.id = 'resetZoomBtn';
+    resetZoomBtn.className = 'panel-btn';
+    resetZoomBtn.title = 'Reset Zoom';
+    resetZoomBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 109-9 9.75 9.75 0 00-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>';
+    resetZoomBtn.addEventListener('click', () => {
+      this.#stateMachine.resetZoom();
+    });
+
     const appInfo = document.createElement('div');
     appInfo.className = 'panel-app-info';
     appInfo.innerHTML = `<span class="app-name">${APP_NAME}</span><span class="app-version">${APP_VERSION}</span>`;
@@ -204,6 +232,7 @@ class CorePanel {
     sectionHeader.appendChild(clearBtn);
     sectionHeader.appendChild(undoBtn);
     sectionHeader.appendChild(redoBtn);
+    sectionHeader.appendChild(resetZoomBtn);
     sectionHeader.appendChild(appInfo);
     panel.appendChild(sectionHeader);
 
@@ -393,6 +422,16 @@ class DrawArea {
     return d;
   }
 
+  #updateViewBox() {
+    if (!this.#svg) return;
+    const scale = this.#stateMachine.scale;
+    const panX = this.#stateMachine.panX;
+    const panY = this.#stateMachine.panY;
+    const w = 2970 / scale;
+    const h = 2100 / scale;
+    this.#svg.setAttribute('viewBox', `${panX} ${panY} ${w} ${h}`);
+  }
+
   _redraw() {
     if (!this.#svg || !this.#svgPaths) return;
 
@@ -492,6 +531,22 @@ class DrawArea {
         this.#stateMachine.selectedPath = found || null;
       }
     });
+
+    overlay.engine.on('pinchChange', (e) => {
+      const newScale = this.#stateMachine.scale * e.scale;
+      this.#stateMachine.scale = Math.max(0.5, Math.min(3.0, newScale));
+      this.#updateViewBox();
+    });
+
+    overlay.engine.on('catchMove', (e) => {
+      const scale = this.#stateMachine.scale;
+      this.#stateMachine.panX -= e.moveX / scale;
+      this.#stateMachine.panY -= e.moveY / scale;
+      this.#updateViewBox();
+    });
+
+    this.#stateMachine.on('zoomChange', () => this.#updateViewBox());
+    this.#updateViewBox();
 
     overlay.engine.on('tntBang', () => {
       console.log('[TNT] tntBang');
