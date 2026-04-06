@@ -8,7 +8,8 @@ var StateMachine = (function() {
       currentColor: '#ffffff',
       currentSize: 8,
       paths: [],
-      currentPath: null
+      currentPath: null,
+      selectedPath: null
     };
     this._listeners = {};
   }
@@ -44,6 +45,11 @@ var StateMachine = (function() {
   Object.defineProperty(StateMachine.prototype, 'currentPath', {
     get: function() { return this._state.currentPath; },
     set: function(v) { this._state.currentPath = v; this._emit('currentPathChange', v); }
+  });
+
+  Object.defineProperty(StateMachine.prototype, 'selectedPath', {
+    get: function() { return this._state.selectedPath; },
+    set: function(v) { this._state.selectedPath = v; this._emit('selectedPathChange', v); }
   });
 
   StateMachine.prototype.addPath = function(path) {
@@ -302,8 +308,9 @@ var DrawArea = (function() {
     this.svgPaths.innerHTML = '';
 
     var paths = this.stateMachine.paths;
+    var selectedPath = this.stateMachine.selectedPath;
     var self = this;
-    paths.forEach(function(path) {
+    paths.forEach(function(path, index) {
       if (path.points.length < 2) return;
       var pathEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
       pathEl.setAttribute('d', self._pointsToSvgPath(path.points));
@@ -312,6 +319,12 @@ var DrawArea = (function() {
       pathEl.setAttribute('fill', 'none');
       pathEl.setAttribute('stroke-linecap', 'round');
       pathEl.setAttribute('stroke-linejoin', 'round');
+      pathEl.setAttribute('data-index', index);
+      
+      if (selectedPath === path) {
+        pathEl.setAttribute('class', 'selected');
+      }
+      
       self.svgPaths.appendChild(pathEl);
     });
 
@@ -328,10 +341,30 @@ var DrawArea = (function() {
     }
   };
 
+  DrawArea.prototype._findPathAtPoint = function(x, y) {
+    var paths = this.stateMachine.paths;
+    var threshold = 10;
+    
+    for (var i = paths.length - 1; i >= 0; i--) {
+      var path = paths[i];
+      if (path.points.length < 2) continue;
+      
+      for (var j = 0; j < path.points.length; j++) {
+        var dx = path.points[j].x - x;
+        var dy = path.points[j].y - y;
+        if (Math.sqrt(dx * dx + dy * dy) < threshold) {
+          return path;
+        }
+      }
+    }
+    return null;
+  };
+
   DrawArea.prototype.bindDrawEvents = function(overlay) {
     var self = this;
     this.stateMachine.on('pathsChange', function() { self._redraw(); });
     this.stateMachine.on('currentPathChange', function() { self._redraw(); });
+    this.stateMachine.on('selectedPathChange', function() { self._redraw(); });
 
     overlay.engine.on('cursorActivate', function(e) {
       console.log('[TNT] cursorActivate:', e.touchX, e.touchY);
@@ -363,6 +396,11 @@ var DrawArea = (function() {
 
     overlay.engine.on('tap', function(e) {
       console.log('[TNT] tap:', e.x, e.y);
+      if (self.stateMachine.currentTool === 'select') {
+        var pt = self._screenToDoc(e.x, e.y);
+        var found = self._findPathAtPoint(pt.x, pt.y);
+        self.stateMachine.selectedPath = found || null;
+      }
     });
 
     overlay.engine.on('tntBang', function() {

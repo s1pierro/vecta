@@ -67,7 +67,12 @@
       stroke-linejoin: round;
     }
     #svgPaths path {
-      pointer-events: none;
+      pointer-events: stroke;
+    }
+    #svgPaths path.selected {
+      stroke: #4fc3f7 !important;
+      stroke-width: 12px;
+      filter: drop-shadow(0 0 4px rgba(79, 195, 247, 0.8));
     }
     #currentPath {
       pointer-events: none;
