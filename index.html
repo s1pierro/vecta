@@ -51,15 +51,15 @@
     #drawArea {
       flex: 1;
       position: relative;
-      overflow: auto;
+      overflow: hidden;
       background: #fff;
     }
     #drawAreaSvg {
-      display: block;
+      position: absolute;
+      top: 0;
+      left: 0;
       width: 2970px;
       height: 2100px;
-      min-width: 2970px;
-      min-height: 2100px;
     }
     #drawAreaSvg path {
       fill: none;

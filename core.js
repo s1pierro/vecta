@@ -282,10 +282,8 @@ var DrawArea = (function() {
   DrawArea.prototype._screenToDoc = function(screenX, screenY) {
     if (!this.svg) return { x: screenX, y: screenY };
     var rect = this.svg.getBoundingClientRect();
-    var scrollLeft = this.el.scrollLeft;
-    var scrollTop = this.el.scrollTop;
-    var docX = screenX + scrollLeft - rect.left;
-    var docY = screenY + scrollTop - rect.top;
+    var docX = screenX - rect.left;
+    var docY = screenY - rect.top;
     return { x: docX, y: docY };
   };
 
