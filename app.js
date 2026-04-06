@@ -90,6 +90,7 @@ var Application = (function() {
 
     this.statesMachine.on('colorChange', function() { self._drawArea._redraw(); });
     this.statesMachine.on('sizeChange', function() { self._drawArea._redraw(); });
+    this.statesMachine.on('clearCanvas', function() { self._drawArea._redraw(); });
 
     console.log('Vecta initialized');
   };

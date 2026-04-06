@@ -62,6 +62,11 @@ var StateMachine = (function() {
     }
   };
 
+  StateMachine.prototype.clearCanvas = function() {
+    this._state.paths = [];
+    this._emit('clearCanvas');
+  };
+
   return StateMachine;
 })();
 
@@ -94,11 +99,21 @@ var CorePanel = (function() {
       }
     });
 
+    var clearBtn = document.createElement('button');
+    clearBtn.id = 'clearBtn';
+    clearBtn.className = 'panel-btn';
+    clearBtn.title = 'Effacer';
+    clearBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>';
+    clearBtn.addEventListener('click', function() {
+      self.statesMachine.clearCanvas();
+    });
+
     var appInfo = document.createElement('div');
     appInfo.className = 'panel-app-info';
     appInfo.innerHTML = '<span class="app-name">' + APP_NAME + '</span><span class="app-version">' + APP_VERSION + '</span>';
 
     sectionHeader.appendChild(fullscreenBtn);
+    sectionHeader.appendChild(clearBtn);
     sectionHeader.appendChild(appInfo);
     panel.appendChild(sectionHeader);
 
