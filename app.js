@@ -124,4 +124,7 @@ var Application = (function() {
   return Application;
 })();
 
-var app = new Application();
+var app = null;
+document.addEventListener('DOMContentLoaded', function() {
+  app = new Application();
+});
