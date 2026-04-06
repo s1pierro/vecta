@@ -330,8 +330,10 @@ var DrawArea = (function() {
     var scale = this.stateMachine.scale;
     var panX = this.stateMachine.panX;
     var panY = this.stateMachine.panY;
-    var docX = (screenX - rect.left) / scale + panX;
-    var docY = (screenY - rect.top) / scale + panY;
+    var scrollLeft = this.el.scrollLeft;
+    var scrollTop = this.el.scrollTop;
+    var docX = (screenX + scrollLeft - rect.left) / scale + panX;
+    var docY = (screenY + scrollTop - rect.top) / scale + panY;
     return { x: docX, y: docY };
   };
 
@@ -420,6 +422,7 @@ var DrawArea = (function() {
     });
 
     overlay.engine.on('catchMove', function(e) {
+      if (self.stateMachine.currentPath) return;
       console.log('[TNT] catchMove:', e.moveX, e.moveY);
       var scale = self.stateMachine.scale;
       self.stateMachine.panX -= e.moveX / scale;
