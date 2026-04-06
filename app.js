@@ -1,5 +1,3 @@
-const APP_NAME = 'Vecta';
-
 class LayoutManager {
   #corePanel;
   #drawArea;
