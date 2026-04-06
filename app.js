@@ -62,6 +62,16 @@ var Application = (function() {
     drawContainer.id = 'drawAreaContainer';
     this._drawArea.buildDom(drawContainer);
     appGround.appendChild(drawContainer);
+
+    var statusBar = document.createElement('div');
+    statusBar.id = 'statusBar';
+    statusBar.innerHTML = 
+      '<span><span class="label">Mode:</span><span class="value" id="statusMode">-</span></span>' +
+      '<span><span class="label">Tool:</span><span class="value" id="statusTool">-</span></span>' +
+      '<span><span class="label">Couleur:</span><span class="value" id="statusColor">-</span></span>' +
+      '<span><span class="label">Taille:</span><span class="value" id="statusSize">-</span></span>' +
+      '<span><span class="label">Sélection:</span><span class="value" id="statusSelected">-</span></span>';
+    container.appendChild(statusBar);
   };
 
   Application.prototype._init = function() {
