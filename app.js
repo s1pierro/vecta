@@ -101,6 +101,16 @@ class Application {
     this.#statesMachine.on('colorChange', () => this.#updateStatusBar());
     this.#statesMachine.on('sizeChange', () => this.#updateStatusBar());
     this.#statesMachine.on('selectedPathChange', () => this.#updateStatusBar());
+    this.#statesMachine.on('historyChange', () => this.#updateHistoryButtons());
+
+    this.#updateHistoryButtons();
+  }
+
+  #updateHistoryButtons() {
+    const undoBtn = document.getElementById('undoBtn');
+    const redoBtn = document.getElementById('redoBtn');
+    if (undoBtn) undoBtn.disabled = !this.#statesMachine.canUndo();
+    if (redoBtn) redoBtn.disabled = !this.#statesMachine.canRedo();
   }
 
   #updateStatusBar() {

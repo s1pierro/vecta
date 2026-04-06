@@ -78,6 +78,15 @@
   stroke-width: 2;
 }
 
+.panel-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.panel-btn:disabled svg {
+  stroke: rgba(255, 255, 255, 0.3);
+}
+
 /* Tools Section */
 .panel-section-tool {
   height: 240px;

@@ -4,6 +4,9 @@ const APP_VERSION = '0.1';
 class StateMachine {
   #state;
   #listeners;
+  #history = [];
+  #historyIndex = -1;
+  #maxHistory = 50;
 
   constructor() {
     this.#state = {
@@ -16,6 +19,7 @@ class StateMachine {
       selectedPath: null
     };
     this.#listeners = {};
+    this.#saveState();
   }
 
   get state() {
@@ -56,14 +60,71 @@ class StateMachine {
     }
   }
 
+  #createSnapshot() {
+    return {
+      mode: this.#state.mode,
+      currentTool: this.#state.currentTool,
+      currentColor: this.#state.currentColor,
+      currentSize: this.#state.currentSize,
+      paths: JSON.parse(JSON.stringify(this.#state.paths))
+    };
+  }
+
+  #restoreState(snapshot) {
+    this.#state.mode = snapshot.mode;
+    this.#state.currentTool = snapshot.currentTool;
+    this.#state.currentColor = snapshot.currentColor;
+    this.#state.currentSize = snapshot.currentSize;
+    this.#state.paths = JSON.parse(JSON.stringify(snapshot.paths));
+    this.#state.selectedPath = null;
+    this.#emit('pathsChange', this.#state.paths);
+    this.#emit('modeChange', this.#state.mode);
+    this.#emit('toolChange', this.#state.currentTool);
+    this.#emit('colorChange', this.#state.currentColor);
+    this.#emit('sizeChange', this.#state.currentSize);
+  }
+
+  #saveState() {
+    if (this.#historyIndex < this.#history.length - 1) {
+      this.#history = this.#history.slice(0, this.#historyIndex + 1);
+    }
+    this.#history.push(this.#createSnapshot());
+    if (this.#history.length > this.#maxHistory) {
+      this.#history.shift();
+    }
+    this.#historyIndex = this.#history.length - 1;
+    this.#emit('historyChange');
+  }
+
+  undo() {
+    if (this.#historyIndex > 0) {
+      this.#historyIndex--;
+      this.#restoreState(this.#history[this.#historyIndex]);
+      this.#emit('historyChange');
+    }
+  }
+
+  redo() {
+    if (this.#historyIndex < this.#history.length - 1) {
+      this.#historyIndex++;
+      this.#restoreState(this.#history[this.#historyIndex]);
+      this.#emit('historyChange');
+    }
+  }
+
+  canUndo() { return this.#historyIndex > 0; }
+  canRedo() { return this.#historyIndex < this.#history.length - 1; }
+
   addPath(path) {
     this.#state.paths.push(path);
     this.#emit('pathsChange', this.#state.paths);
+    this.#saveState();
   }
 
   clearCanvas() {
     this.#state.paths = [];
     this.#emit('clearCanvas');
+    this.#saveState();
   }
 
   setMode(newMode) {
@@ -113,12 +174,32 @@ class CorePanel {
       this.#stateMachine.clearCanvas();
     });
 
+    const undoBtn = document.createElement('button');
+    undoBtn.id = 'undoBtn';
+    undoBtn.className = 'panel-btn';
+    undoBtn.title = 'Annuler';
+    undoBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M3 10h10a5 5 0 015 5v2M3 10l5-5M3 10l5 5"/></svg>';
+    undoBtn.addEventListener('click', () => {
+      this.#stateMachine.undo();
+    });
+
+    const redoBtn = document.createElement('button');
+    redoBtn.id = 'redoBtn';
+    redoBtn.className = 'panel-btn';
+    redoBtn.title = 'Refaire';
+    redoBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M21 10H11a5 5 0 00-5 5v2M21 10l-5-5M21 10l-5 5"/></svg>';
+    redoBtn.addEventListener('click', () => {
+      this.#stateMachine.redo();
+    });
+
     const appInfo = document.createElement('div');
     appInfo.className = 'panel-app-info';
     appInfo.innerHTML = `<span class="app-name">${APP_NAME}</span><span class="app-version">${APP_VERSION}</span>`;
 
     sectionHeader.appendChild(fullscreenBtn);
     sectionHeader.appendChild(clearBtn);
+    sectionHeader.appendChild(undoBtn);
+    sectionHeader.appendChild(redoBtn);
     sectionHeader.appendChild(appInfo);
     panel.appendChild(sectionHeader);
 
