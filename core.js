@@ -234,81 +234,80 @@ var DrawArea = (function() {
   function DrawArea(stateMachine) {
     this.stateMachine = stateMachine;
     this.el = null;
-    this.canvas = null;
-    this.ctx = null;
+    this.svg = null;
+    this.svgPaths = null;
+    this.svgCurrentPath = null;
   }
 
   DrawArea.prototype.buildDom = function(container) {
     var drawArea = document.createElement('div');
     drawArea.id = 'drawArea';
 
-    this.canvas = document.createElement('canvas');
-    this.canvas.id = 'canvas';
-    this.ctx = this.canvas.getContext('2d');
+    this.svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    this.svg.setAttribute('id', 'drawAreaSvg');
+    this.svg.setAttribute('viewBox', '0 0 2970 2100');
+    this.svg.setAttribute('width', '2970');
+    this.svg.setAttribute('height', '2100');
 
-    drawArea.appendChild(this.canvas);
+    this.svgPaths = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    this.svgPaths.setAttribute('id', 'svgPaths');
+
+    this.svgCurrentPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    this.svgCurrentPath.setAttribute('id', 'currentPath');
+
+    this.svg.appendChild(this.svgPaths);
+    this.svg.appendChild(this.svgCurrentPath);
+    drawArea.appendChild(this.svg);
     this.el = drawArea;
     container.appendChild(drawArea);
-
-    this._resizeCanvas();
-    var self = this;
-    window.addEventListener('resize', function() { self._resizeCanvas(); });
   };
 
-  Object.defineProperty(DrawArea.prototype, 'canvasElement', {
-    get: function() { return this.canvas; }
+  Object.defineProperty(DrawArea.prototype, 'svgElement', {
+    get: function() { return this.svg; }
   });
 
   Object.defineProperty(DrawArea.prototype, 'container', {
     get: function() { return this.el; }
   });
 
-  Object.defineProperty(DrawArea.prototype, 'context', {
-    get: function() { return this.ctx; }
-  });
-
-  DrawArea.prototype._resizeCanvas = function() {
-    if (!this.el || !this.canvas) return;
-    var w = this.el.clientWidth;
-    var h = this.el.clientHeight;
-    this.canvas.width = w * window.devicePixelRatio;
-    this.canvas.height = h * window.devicePixelRatio;
-    this.ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
-    this._redraw();
+  DrawArea.prototype._pointsToSvgPath = function(points) {
+    if (!points || points.length < 2) return '';
+    var d = 'M ' + points[0].x + ' ' + points[0].y;
+    for (var i = 1; i < points.length; i++) {
+      d += ' L ' + points[i].x + ' ' + points[i].y;
+    }
+    return d;
   };
 
   DrawArea.prototype._redraw = function() {
-    if (!this.ctx || !this.el) return;
-    var w = this.el.clientWidth;
-    var h = this.el.clientHeight;
-    this.ctx.clearRect(0, 0, w, h);
-    this.ctx.lineCap = 'round';
-    this.ctx.lineJoin = 'round';
+    if (!this.svg || !this.svgPaths) return;
+
+    this.svgPaths.innerHTML = '';
 
     var paths = this.stateMachine.paths;
     var self = this;
     paths.forEach(function(path) {
       if (path.points.length < 2) return;
-      self.ctx.strokeStyle = path.color;
-      self.ctx.lineWidth = path.size;
-      self.ctx.beginPath();
-      self.ctx.moveTo(path.points[0].x, path.points[0].y);
-      for (var i = 1; i < path.points.length; i++) {
-        self.ctx.lineTo(path.points[i].x, path.points[i].y);
-      }
-      self.ctx.stroke();
+      var pathEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      pathEl.setAttribute('d', self._pointsToSvgPath(path.points));
+      pathEl.setAttribute('stroke', path.color);
+      pathEl.setAttribute('stroke-width', path.size);
+      pathEl.setAttribute('fill', 'none');
+      pathEl.setAttribute('stroke-linecap', 'round');
+      pathEl.setAttribute('stroke-linejoin', 'round');
+      self.svgPaths.appendChild(pathEl);
     });
 
     var currentPath = this.stateMachine.currentPath;
     if (currentPath && currentPath.length >= 2) {
-      this.ctx.strokeStyle = this.stateMachine.currentColor;
-      this.ctx.lineWidth = this.stateMachine.currentSize;
-      this.ctx.beginPath();
-      this.ctx.moveTo(currentPath[0].x, currentPath[0].y);
-      for (var j = 1; j < currentPath.length; j++) {
-        this.ctx.lineTo(currentPath[j].x, currentPath[j].y);
-      }
-      this.ctx.stroke();
+      this.svgCurrentPath.setAttribute('d', this._pointsToSvgPath(currentPath));
+      this.svgCurrentPath.setAttribute('stroke', this.stateMachine.currentColor);
+      this.svgCurrentPath.setAttribute('stroke-width', this.stateMachine.currentSize);
+      this.svgCurrentPath.setAttribute('fill', 'none');
+      this.svgCurrentPath.setAttribute('stroke-linecap', 'round');
+      this.svgCurrentPath.setAttribute('stroke-linejoin', 'round');
+    } else {
+      this.svgCurrentPath.setAttribute('d', '');
     }
   };
 

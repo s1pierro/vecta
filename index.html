@@ -51,12 +51,26 @@
     #drawArea {
       flex: 1;
       position: relative;
-      overflow: hidden;
+      overflow: auto;
+      background: #fff;
     }
-    #drawArea canvas {
+    #drawAreaSvg {
       display: block;
-      width: 100%;
-      height: 100%;
+      width: 2970px;
+      height: 2100px;
+      min-width: 2970px;
+      min-height: 2100px;
+    }
+    #drawAreaSvg path {
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    #svgPaths path {
+      pointer-events: none;
+    }
+    #currentPath {
+      pointer-events: none;
     }
   </style>
 </head>

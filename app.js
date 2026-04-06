@@ -24,11 +24,6 @@ var LayoutManager = (function() {
   LayoutManager.prototype.applyLayout = function(orientation) {
     this.appGround.classList.remove('landscape', 'portrait');
     this.appGround.classList.add(orientation);
-    
-    var self = this;
-    setTimeout(function() {
-      self.drawArea._resizeCanvas();
-    }, 100);
   };
 
   return LayoutManager;
