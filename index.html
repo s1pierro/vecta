@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
-  <script type="text/javascript">eruda.init();</script>
+  <script>eruda.init();</script>
   <meta name="theme-color" content="#1a1a2e">
   <meta name="description" content="Vecta - Application de dessin vectoriel">
   <title>Vecta</title>
@@ -27,43 +27,124 @@
       -webkit-user-select: none;
       user-select: none;
     }
-    #app {
+    #app-ground {
       width: 100%;
       height: 100%;
-      position: relative;
+      display: flex;
     }
-    #canvasContainer {
-      position: absolute;
-      top: 0;
-      left: 60px;
-      right: 0;
-      bottom: 0;
+    #app-ground.landscape {
+      flex-direction: row;
     }
-    #canvasContainer canvas {
-      display: block;
-      width: 100%;
-      height: 100%;
+    #app-ground.portrait {
+      flex-direction: column;
     }
-    #panel {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 60px;
-      height: 100%;
+    #corePanel {
       background: rgba(30, 30, 50, 0.9);
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 12px 0;
+      padding: 12px;
       gap: 12px;
       z-index: 100;
+      transition: all 0.3s ease;
     }
-    #panel.hidden {
+    #corePanel.hidden {
       display: none;
     }
+    .landscape #corePanel {
+      width: 60px;
+      height: 100%;
+    }
+    .portrait #corePanel {
+      width: 100%;
+      height: 60px;
+      flex-direction: row;
+      padding: 8px 12px;
+      gap: 8px;
+    }
+    .portrait #corePanel .panel-header {
+      flex-direction: column;
+      gap: 4px;
+    }
+    .portrait #corePanel #panelTools,
+    .portrait #corePanel #panelColors,
+    .portrait #corePanel #panelSizes {
+      flex-direction: row;
+    }
+    .portrait #corePanel .panel-sep {
+      width: 1px;
+      height: 32px;
+    }
+    .portrait #corePanel .panel-app-info {
+      font-size: 10px;
+    }
+    .panel-header {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+    }
+    .panel-app-info {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      font-size: 10px;
+      color: rgba(255, 255, 255, 0.6);
+    }
+    .app-name {
+      font-weight: bold;
+      color: #fff;
+    }
+    .app-version {
+      font-size: 9px;
+    }
+    .panel-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      border: 2px solid rgba(255, 255, 255, 0.2);
+      background: rgba(255, 255, 255, 0.05);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    .panel-btn svg {
+      width: 20px;
+      height: 20px;
+      stroke: #fff;
+      fill: none;
+      stroke-width: 2;
+    }
+    #corePanelContainer {
+      flex-shrink: 0;
+    }
+    #drawAreaContainer {
+      flex: 1;
+      min-width: 0;
+      min-height: 0;
+      display: flex;
+    }
+    #drawArea {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+    #drawArea canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    #panelTools {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      align-items: center;
+    }
     .panel-tool-btn {
-      width: 44px;
-      height: 44px;
+      width: 40px;
+      height: 40px;
       border-radius: 8px;
       border: 2px solid rgba(255, 255, 255, 0.2);
       background: rgba(255, 255, 255, 0.05);
@@ -77,32 +158,33 @@
       background: rgba(79, 195, 247, 0.2);
     }
     .panel-tool-btn svg {
-      width: 24px;
-      height: 24px;
+      width: 20px;
+      height: 20px;
       stroke: #fff;
       fill: none;
       stroke-width: 2;
     }
-    .panel-color-btn {
-      width: 32px;
-      height: 32px;
-      border-radius: 50%;
-      border: 2px solid rgba(255, 255, 255, 0.3);
-    }
-    .panel-color-btn.active {
-      border-color: #fff;
-      box-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
-    }
     #panelColors {
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 6px;
       align-items: center;
     }
     .panel-sep {
       width: 32px;
       height: 1px;
       background: rgba(255, 255, 255, 0.2);
+    }
+    .panel-color-btn {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      cursor: pointer;
+    }
+    .panel-color-btn.active {
+      border-color: #fff;
+      box-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
     }
     #panelSizes {
       display: flex;
@@ -111,98 +193,22 @@
       align-items: center;
     }
     .panel-size-btn {
-      width: 28px;
-      height: 28px;
+      width: 24px;
+      height: 24px;
       border-radius: 50%;
       background: rgba(255, 255, 255, 0.1);
       border: 1px solid rgba(255, 255, 255, 0.2);
+      cursor: pointer;
     }
     .panel-size-btn.active {
       background: rgba(79, 195, 247, 0.4);
       border-color: #4fc3f7;
     }
-    .panel-toggle-btn {
-      width: 44px;
-      height: 44px;
-      border-radius: 8px;
-      border: 2px solid rgba(255, 255, 255, 0.2);
-      background: rgba(255, 255, 255, 0.05);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-    }
-    #togglePanelBtn {
-      margin-top: auto;
-    }
-    #fullscreenBtn {
-      position: absolute;
-      top: 12px;
-      right: 12px;
-      width: 44px;
-      height: 44px;
-      border-radius: 8px;
-      border: 2px solid rgba(255, 255, 255, 0.2);
-      background: rgba(255, 255, 255, 0.05);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      z-index: 100;
-    }
-    #fullscreenBtn svg {
-      width: 24px;
-      height: 24px;
-      stroke: #fff;
-      fill: none;
-      stroke-width: 2;
-    }
-    </style>
+  </style>
 </head>
 <body>
-  <div id="app">
-    <div id="panel">
-      <button id="togglePanelBtn" class="panel-toggle-btn" title="Afficher/Masquer panneau">
-        <svg viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7"/></svg>
-      </button>
-      <div id="panelTools">
-        <button class="panel-tool-btn active" data-tool="draw">
-          <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z"/></svg>
-        </button>
-        <button class="panel-tool-btn" data-tool="select">
-          <svg viewBox="0 0 24 24"><path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/></svg>
-        </button>
-        <button class="panel-tool-btn" data-tool="pan">
-          <svg viewBox="0 0 24 24"><path d="M5 9l-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20"/></svg>
-        </button>
-      </div>
-      <div class="panel-sep"></div>
-      <div id="panelColors">
-        <button class="panel-color-btn active" data-color="#ffffff" style="background:#ffffff"></button>
-        <button class="panel-color-btn" data-color="#ff5252" style="background:#ff5252"></button>
-        <button class="panel-color-btn" data-color="#4fc3f7" style="background:#4fc3f7"></button>
-        <button class="panel-color-btn" data-color="#69f0ae" style="background:#69f0ae"></button>
-        <button class="panel-color-btn" data-color="#ffd54f" style="background:#ffd54f"></button>
-        <button class="panel-color-btn" data-color="#ba68c8" style="background:#ba68c8"></button>
-        <button class="panel-color-btn" data-color="#ff9800" style="background:#ff9800"></button>
-        <button class="panel-color-btn" data-color="#212121" style="background:#212121"></button>
-      </div>
-      <div class="panel-sep"></div>
-      <div id="panelSizes">
-        <button class="panel-size-btn" data-size="2"></button>
-        <button class="panel-size-btn" data-size="4"></button>
-        <button class="panel-size-btn active" data-size="8"></button>
-        <button class="panel-size-btn" data-size="16"></button>
-      </div>
-    </div>
-    <div id="canvasContainer">
-      <canvas id="canvas"></canvas>
-      <button id="fullscreenBtn" title="Plein écran">
-        <svg class="expand-icon" viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/></svg>
-        <svg class="compress-icon" viewBox="0 0 24 24" style="display:none"><path d="M8 3v3a2 2 0 01-2 2H3m18 0h-3a2 2 0 01-2-2V3m0 18v-3a2 2 0 012-2h3M3 16h3a2 2 0 012 2v3"/></svg>
-      </button>
-    </div>
-  </div>
   <script src="tnt.js"></script>
+  <script src="core.js"></script>
   <script src="app.js"></script>
 </body>
+</html>
