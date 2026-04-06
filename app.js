@@ -69,7 +69,7 @@ var Application = (function() {
     var drawAreaContainer = this._drawArea.container;
     console.log('Creating TouchOverlay on:', drawAreaContainer);
     
-    this.touchOverlay = new TouchOverlay(drawAreaContainer, {
+    this.touchOverlay = new TouchOverlay(this._drawArea.touchOverlayElement, {
       dist: 0,
       contactSize: 24,
       cursorSize: 14,

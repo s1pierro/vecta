@@ -8,7 +8,10 @@ var StateMachine = (function() {
       currentColor: '#ffffff',
       currentSize: 8,
       paths: [],
-      currentPath: null
+      currentPath: null,
+      scale: 0.5,
+      panX: 0,
+      panY: 0
     };
     this._listeners = {};
   }
@@ -45,6 +48,28 @@ var StateMachine = (function() {
     get: function() { return this._state.currentPath; },
     set: function(v) { this._state.currentPath = v; this._emit('currentPathChange', v); }
   });
+
+  Object.defineProperty(StateMachine.prototype, 'scale', {
+    get: function() { return this._state.scale; },
+    set: function(v) { this._state.scale = Math.max(0.5, Math.min(3.0, v)); this._emit('zoomChange', this._state); }
+  });
+
+  Object.defineProperty(StateMachine.prototype, 'panX', {
+    get: function() { return this._state.panX; },
+    set: function(v) { this._state.panX = v; this._emit('zoomChange', this._state); }
+  });
+
+  Object.defineProperty(StateMachine.prototype, 'panY', {
+    get: function() { return this._state.panY; },
+    set: function(v) { this._state.panY = v; this._emit('zoomChange', this._state); }
+  });
+
+  StateMachine.prototype.resetZoom = function() {
+    this._state.scale = 0.5;
+    this._state.panX = 0;
+    this._state.panY = 0;
+    this._emit('zoomChange', this._state);
+  };
 
   StateMachine.prototype.addPath = function(path) {
     this._state.paths.push(path);
@@ -108,12 +133,22 @@ var CorePanel = (function() {
       self.stateMachine.clearCanvas();
     });
 
+    var resetBtn = document.createElement('button');
+    resetBtn.id = 'resetBtn';
+    resetBtn.className = 'panel-btn';
+    resetBtn.title = 'Reset Zoom';
+    resetBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 109-9 9.75 9.75 0 00-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>';
+    resetBtn.addEventListener('click', function() {
+      self.stateMachine.resetZoom();
+    });
+
     var appInfo = document.createElement('div');
     appInfo.className = 'panel-app-info';
     appInfo.innerHTML = '<span class="app-name">' + APP_NAME + '</span><span class="app-version">' + APP_VERSION + '</span>';
 
     sectionHeader.appendChild(fullscreenBtn);
     sectionHeader.appendChild(clearBtn);
+    sectionHeader.appendChild(resetBtn);
     sectionHeader.appendChild(appInfo);
     panel.appendChild(sectionHeader);
 
@@ -243,6 +278,10 @@ var DrawArea = (function() {
     var drawArea = document.createElement('div');
     drawArea.id = 'drawArea';
 
+    var touchOverlay = document.createElement('div');
+    touchOverlay.id = 'touchOverlay';
+    drawArea.appendChild(touchOverlay);
+
     this.svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     this.svg.setAttribute('id', 'drawAreaSvg');
     this.svg.setAttribute('viewBox', '0 0 2970 2100');
@@ -259,6 +298,7 @@ var DrawArea = (function() {
     this.svg.appendChild(this.svgCurrentPath);
     drawArea.appendChild(this.svg);
     this.el = drawArea;
+    this.touchOverlay = touchOverlay;
     container.appendChild(drawArea);
   };
 
@@ -266,9 +306,34 @@ var DrawArea = (function() {
     get: function() { return this.svg; }
   });
 
+  Object.defineProperty(DrawArea.prototype, 'touchOverlayElement', {
+    get: function() { return this.touchOverlay; }
+  });
+
   Object.defineProperty(DrawArea.prototype, 'container', {
     get: function() { return this.el; }
   });
+
+  DrawArea.prototype._updateViewBox = function() {
+    if (!this.svg) return;
+    var scale = this.stateMachine.scale;
+    var panX = this.stateMachine.panX;
+    var panY = this.stateMachine.panY;
+    var w = 2970 / scale;
+    var h = 2100 / scale;
+    this.svg.setAttribute('viewBox', panX + ' ' + panY + ' ' + w + ' ' + h);
+  };
+
+  DrawArea.prototype._screenToDoc = function(screenX, screenY) {
+    if (!this.svg) return { x: screenX, y: screenY };
+    var rect = this.svg.getBoundingClientRect();
+    var scale = this.stateMachine.scale;
+    var panX = this.stateMachine.panX;
+    var panY = this.stateMachine.panY;
+    var docX = (screenX - rect.left) / scale + panX;
+    var docY = (screenY - rect.top) / scale + panY;
+    return { x: docX, y: docY };
+  };
 
   DrawArea.prototype._pointsToSvgPath = function(points) {
     if (!points || points.length < 2) return '';
@@ -315,16 +380,21 @@ var DrawArea = (function() {
     var self = this;
     this.stateMachine.on('pathsChange', function() { self._redraw(); });
     this.stateMachine.on('currentPathChange', function() { self._redraw(); });
+    this.stateMachine.on('zoomChange', function() { self._updateViewBox(); });
+
+    this._updateViewBox();
 
     overlay.engine.on('cursorActivate', function(e) {
       console.log('[TNT] cursorActivate:', e.touchX, e.touchY);
-      self.stateMachine.currentPath = [{ x: e.touchX, y: e.touchY }];
+      var pt = self._screenToDoc(e.touchX, e.touchY);
+      self.stateMachine.currentPath = [{ x: pt.x, y: pt.y }];
     });
 
     overlay.engine.on('cursorMove', function(e) {
       var path = self.stateMachine.currentPath;
       if (path) {
-        path.push({ x: e.touchX, y: e.touchY });
+        var pt = self._screenToDoc(e.touchX, e.touchY);
+        path.push({ x: pt.x, y: pt.y });
         self._redraw();
       }
     });
@@ -340,6 +410,20 @@ var DrawArea = (function() {
         });
       }
       self.stateMachine.currentPath = null;
+    });
+
+    overlay.engine.on('pinchChange', function(e) {
+      console.log('[TNT] pinchChange:', e.scale);
+      var newScale = self.stateMachine.scale * e.scale;
+      newScale = Math.max(0.5, Math.min(3.0, newScale));
+      self.stateMachine.scale = newScale;
+    });
+
+    overlay.engine.on('catchMove', function(e) {
+      console.log('[TNT] catchMove:', e.moveX, e.moveY);
+      var scale = self.stateMachine.scale;
+      self.stateMachine.panX -= e.moveX / scale;
+      self.stateMachine.panY -= e.moveY / scale;
     });
 
     overlay.engine.on('tap', function(e) {
