@@ -129,6 +129,10 @@ class StateMachine {
 
   setMode(newMode) {
     this.#state.currentPath = null;
+    if (newMode !== 'selection') {
+      this.#state.selectedPath = null;
+      this.#emit('selectedPathChange', null);
+    }
     this.#state.mode = newMode;
     this.#emit('modeChange', newMode);
   }
