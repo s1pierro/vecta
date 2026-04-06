@@ -141,7 +141,7 @@ var CorePanel = (function() {
 
     var colors = document.createElement('div');
     colors.id = 'panelColors';
-    var colorList = ['#ffffff', '#ff5252', '#4fc3f7', '#69f0ae', '#ffd54f', '#ba68c8', '#ff9800', '#212121'];
+    var colorList = ['#1a1a2e', '#ffffff', '#ff5252', '#4fc3f7', '#69f0ae', '#ffd54f', '#ba68c8', '#ff9800', '#212121'];
     colorList.forEach(function(color, i) {
       var btn = document.createElement('button');
       btn.className = 'panel-color-btn' + (i === 0 ? ' active' : '');
