@@ -57,46 +57,91 @@
       color: #4fc3f7;
     }
 
-    /* Raw states bar — debug overlay, fixed above everything */
-    #rawStatesBar {
+    /* Raw states modal — draggable, resizable debug panel */
+    #rawStatesModal {
       position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
+      top: 10vh;
+      left: 10vw;
+      width: 33vw;
+      height: 50vh;
+      min-width: 200px;
+      min-height: 150px;
       z-index: 9999;
-      min-height: 1.6em;
-      background: rgba(20, 20, 35, 0.97);
+      background: rgba(15, 15, 30, 0.96);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 8px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(8px);
+    }
+    #rawStatesModal .raw-modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 10px;
+      background: rgba(255, 255, 255, 0.05);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      cursor: grab;
+      user-select: none;
+      flex-shrink: 0;
+    }
+    #rawStatesModal .raw-modal-header:active {
+      cursor: grabbing;
+    }
+    #rawStatesModal .raw-modal-title {
+      font-size: 0.7em;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      color: rgba(255, 255, 255, 0.5);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    #rawStatesModal .raw-modal-close {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      border: none;
+      background: rgba(255, 255, 255, 0.1);
+      color: rgba(255, 255, 255, 0.5);
+      cursor: pointer;
+      font-size: 12px;
+      line-height: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #rawStatesModal .raw-modal-close:hover {
+      background: rgba(255, 80, 80, 0.3);
+      color: #fff;
+    }
+    #rawStatesModal .raw-modal-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px;
+      display: flex;
+      flex-wrap: wrap;
+      align-content: flex-start;
+      gap: 8px;
+    }
+    #rawStatesModal .raw-state-group {
       display: flex;
       flex-wrap: wrap;
       align-items: center;
-      padding: 3px 8px;
-      gap: 8px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.15);
-      font-size: 0.65em;
-      font-family: 'SF Mono', 'Fira Code', monospace;
-      pointer-events: none;
-    }
-    #rawStatesBar .raw-chip {
-      pointer-events: auto;
-    }
-    .raw-state-group {
-      display: flex;
-      align-items: center;
       gap: 3px;
-      padding-right: 8px;
-      border-right: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 4px 6px;
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 4px;
     }
-    .raw-state-group:last-child {
-      border-right: none;
-    }
-    .raw-label {
+    #rawStatesModal .raw-label {
       color: rgba(255, 255, 255, 0.35);
       text-transform: uppercase;
-      font-size: 0.85em;
+      font-size: 0.75em;
+      font-family: 'SF Mono', 'Fira Code', monospace;
       letter-spacing: 0.5px;
       margin-right: 2px;
     }
-    .raw-chip {
+    #rawStatesModal .raw-chip {
       padding: 1px 6px;
       border-radius: 3px;
       background: rgba(255, 255, 255, 0.06);
@@ -104,18 +149,32 @@
       border: 1px solid rgba(255, 255, 255, 0.1);
       transition: all 0.1s ease;
       white-space: nowrap;
+      font-size: 0.65em;
+      font-family: 'SF Mono', 'Fira Code', monospace;
     }
-    .raw-chip.active {
+    #rawStatesModal .raw-chip.active {
       background: rgba(105, 240, 174, 0.18);
       color: #69f0ae;
       border-color: #69f0ae;
       box-shadow: 0 0 6px rgba(105, 240, 174, 0.25);
     }
-    .raw-chip.raw-toggle.active {
+    #rawStatesModal .raw-chip.raw-toggle.active {
       background: rgba(255, 183, 77, 0.18);
       color: #ffb74d;
       border-color: #ffb74d;
       box-shadow: 0 0 6px rgba(255, 183, 77, 0.25);
+    }
+    /* Resize handle */
+    #rawStatesModal::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      right: 0;
+      width: 16px;
+      height: 16px;
+      cursor: nwse-resize;
+      background: linear-gradient(135deg, transparent 50%, rgba(255,255,255,0.2) 50%);
+      border-bottom-right-radius: 8px;
     }
     #app-ground.landscape {
       flex-direction: row;

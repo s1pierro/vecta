@@ -111,8 +111,131 @@ class Application {
         '<span class="raw-chip" data-state="tnt:catching">catching</span>' +
       '</div>';
     container.appendChild(statusBar);
-    // Append to body so fixed positioning works from viewport top
-    document.body.appendChild(rawBar);
+
+    // Raw states modal — draggable, resizable debug panel
+    const modal = document.createElement('div');
+    modal.id = 'rawStatesModal';
+    modal.style.display = 'none'; // hidden by default, toggle with double-tap on statusBar
+    modal.innerHTML =
+      '<div class="raw-modal-header">' +
+        '<span class="raw-modal-title">raw-states</span>' +
+        '<button class="raw-modal-close" title="Close">×</button>' +
+      '</div>' +
+      '<div class="raw-modal-body">' +
+        '<div class="raw-state-group">' +
+          '<span class="raw-label">mode</span>' +
+          '<span class="raw-chip" data-state="mode:drawingTool">drawingTool</span>' +
+          '<span class="raw-chip" data-state="mode:selection">selection</span>' +
+        '</div>' +
+        '<div class="raw-state-group">' +
+          '<span class="raw-label">tool</span>' +
+          '<span class="raw-chip" data-state="tool:draw">draw</span>' +
+          '<span class="raw-chip" data-state="tool:select">select</span>' +
+          '<span class="raw-chip" data-state="tool:pan">pan</span>' +
+        '</div>' +
+        '<div class="raw-state-group">' +
+          '<span class="raw-label">selectables</span>' +
+          '<span class="raw-chip" data-state="sel:objects">objects</span>' +
+          '<span class="raw-chip" data-state="sel:nodes">nodes</span>' +
+          '<span class="raw-chip" data-state="sel:nodeSelection">nodeSelection</span>' +
+        '</div>' +
+        '<div class="raw-state-group">' +
+          '<span class="raw-chip raw-toggle" data-state="has:currentPath">currentPath</span>' +
+          '<span class="raw-chip raw-toggle" data-state="has:selectedPath">selectedPath</span>' +
+          '<span class="raw-chip raw-toggle" data-state="has:selectedNodes">selectedNodes</span>' +
+        '</div>' +
+        '<div class="raw-state-group">' +
+          '<span class="raw-label">tnt</span>' +
+          '<span class="raw-chip" data-state="tnt:idle">idle</span>' +
+          '<span class="raw-chip" data-state="tnt:tapping">tapping</span>' +
+          '<span class="raw-chip" data-state="tnt:grabbing">grabbing</span>' +
+          '<span class="raw-chip" data-state="tnt:pinching">pinching</span>' +
+          '<span class="raw-chip" data-state="tnt:catching">catching</span>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(modal);
+
+    // Toggle visibility with double-tap on statusBar
+    statusBar.addEventListener('dblclick', () => {
+      modal.style.display = modal.style.display === 'none' ? 'flex' : 'none';
+    });
+
+    // Close button
+    modal.querySelector('.raw-modal-close').addEventListener('click', () => {
+      modal.style.display = 'none';
+    });
+
+    // Drag logic
+    const header = modal.querySelector('.raw-modal-header');
+    let dragging = false, dragX, dragY;
+    header.addEventListener('mousedown', (e) => {
+      dragging = true;
+      dragX = e.clientX - modal.offsetLeft;
+      dragY = e.clientY - modal.offsetTop;
+      e.preventDefault();
+    });
+    header.addEventListener('touchstart', (e) => {
+      dragging = true;
+      const t = e.touches[0];
+      dragX = t.clientX - modal.offsetLeft;
+      dragY = t.clientY - modal.offsetTop;
+    }, { passive: true });
+    window.addEventListener('mousemove', (e) => {
+      if (!dragging) return;
+      modal.style.left = (e.clientX - dragX) + 'px';
+      modal.style.top = (e.clientY - dragY) + 'px';
+    });
+    window.addEventListener('touchmove', (e) => {
+      if (!dragging) return;
+      const t = e.touches[0];
+      modal.style.left = (t.clientX - dragX) + 'px';
+      modal.style.top = (t.clientY - dragY) + 'px';
+    }, { passive: true });
+    window.addEventListener('mouseup', () => { dragging = false; });
+    window.addEventListener('touchend', () => { dragging = false; });
+
+    // Resize logic
+    let resizing = false, resizeStartX, resizeStartY, resizeStartW, resizeStartH;
+    modal.addEventListener('mousedown', (e) => {
+      const rect = modal.getBoundingClientRect();
+      if (e.clientX > rect.right - 20 && e.clientY > rect.bottom - 20) {
+        resizing = true;
+        resizeStartX = e.clientX;
+        resizeStartY = e.clientY;
+        resizeStartW = rect.width;
+        resizeStartH = rect.height;
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    });
+    modal.addEventListener('touchstart', (e) => {
+      const rect = modal.getBoundingClientRect();
+      const t = e.touches[0];
+      if (t.clientX > rect.right - 20 && t.clientY > rect.bottom - 20) {
+        resizing = true;
+        resizeStartX = t.clientX;
+        resizeStartY = t.clientY;
+        resizeStartW = rect.width;
+        resizeStartH = rect.height;
+      }
+    }, { passive: true });
+    window.addEventListener('mousemove', (e) => {
+      if (!resizing) return;
+      const w = Math.max(200, resizeStartW + (e.clientX - resizeStartX));
+      const h = Math.max(150, resizeStartH + (e.clientY - resizeStartY));
+      modal.style.width = w + 'px';
+      modal.style.height = h + 'px';
+    });
+    window.addEventListener('touchmove', (e) => {
+      if (!resizing) return;
+      const t = e.touches[0];
+      const w = Math.max(200, resizeStartW + (t.clientX - resizeStartX));
+      const h = Math.max(150, resizeStartH + (t.clientY - resizeStartY));
+      modal.style.width = w + 'px';
+      modal.style.height = h + 'px';
+    }, { passive: true });
+    window.addEventListener('mouseup', () => { resizing = false; });
+    window.addEventListener('touchend', () => { resizing = false; });
   }
 
   #init() {
@@ -168,7 +291,9 @@ class Application {
 
   #updateRawStates() {
     const sm = this.#statesMachine;
-    document.querySelectorAll('.raw-chip').forEach(chip => {
+    const modal = document.getElementById('rawStatesModal');
+    if (!modal) return;
+    modal.querySelectorAll('.raw-chip').forEach(chip => {
       const key = chip.dataset.state;
       let active = false;
       if (key.startsWith('mode:')) active = sm.mode === key.slice(5);
@@ -182,7 +307,9 @@ class Application {
   }
 
   #updateTntState(tntState) {
-    document.querySelectorAll('.raw-chip').forEach(chip => {
+    const modal = document.getElementById('rawStatesModal');
+    if (!modal) return;
+    modal.querySelectorAll('.raw-chip').forEach(chip => {
       if (chip.dataset.state.startsWith('tnt:')) {
         const state = chip.dataset.state.slice(4);
         chip.classList.toggle('active', state === tntState);
