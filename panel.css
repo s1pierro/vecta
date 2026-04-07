@@ -204,6 +204,48 @@
   gap: 4px 12px;
 }
 
+.node-type-selector {
+  display: flex;
+  gap: 4px;
+  padding: 4px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  margin-bottom: 6px;
+}
+
+.node-type-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  font-size: 9px;
+  flex: 1;
+  transition: all 0.15s ease;
+}
+
+.node-type-btn:active {
+  transform: scale(0.95);
+}
+
+.node-type-btn.active {
+  background: rgba(105, 240, 174, 0.15);
+  border-color: #69f0ae;
+  color: #69f0ae;
+}
+
+.node-type-btn svg {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+}
+
 .node-prop-label {
   font-size: 10px;
   color: rgba(255, 255, 255, 0.4);

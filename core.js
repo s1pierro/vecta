@@ -237,21 +237,59 @@ class StateMachine {
     this.#saveState();
   }
 
-  toggleSmoothForSelected() {
+  setNodeTypeForSelected(type) {
     if (!this.#state.selectedPath || this.#state.selectedNodes.length === 0) return;
     const path = this.#state.selectedPath;
     path.points.forEach((p, i) => {
       if (this.#state.selectedNodes.includes(i)) {
-        // Normalize first
         p.cpIn = p.cpIn || { x: 0, y: 0 };
         p.cpOut = p.cpOut || { x: 0, y: 0 };
-        p.smooth = !p.smooth;
-        if (p.smooth && (p.cpIn.x === 0 && p.cpIn.y === 0 && p.cpOut.x === 0 && p.cpOut.y === 0)) {
-          // Auto-generate control points for newly smoothed node
-          this.#autoSmooth(path, i);
-        } else if (!p.smooth) {
-          // Converting to corner: keep control points but they're now independent
-          // No change needed, they just become independent
+        switch (type) {
+          case 'corner':
+            p.smooth = false;
+            p.symmetric = false;
+            p.auto = false;
+            break;
+          case 'smooth':
+            p.smooth = true;
+            p.symmetric = false;
+            p.auto = false;
+            if (p.cpIn.x === 0 && p.cpIn.y === 0 && p.cpOut.x === 0 && p.cpOut.y === 0) {
+              this.#autoGenerateCP(path, i);
+            } else {
+              // Ensure colinear: align cpOut to cpIn direction
+              const lenOut = Math.hypot(p.cpOut.x, p.cpOut.y);
+              const lenIn = Math.hypot(p.cpIn.x, p.cpIn.y);
+              if (lenIn > 0) {
+                p.cpOut.x = (p.cpIn.x / lenIn) * lenOut;
+                p.cpOut.y = (p.cpIn.y / lenIn) * lenOut;
+              }
+            }
+            break;
+          case 'symmetric':
+            p.smooth = true;
+            p.symmetric = true;
+            p.auto = false;
+            if (p.cpIn.x === 0 && p.cpIn.y === 0 && p.cpOut.x === 0 && p.cpOut.y === 0) {
+              this.#autoGenerateCP(path, i);
+            } else {
+              // Equal length, opposite direction
+              const avgLen = (Math.hypot(p.cpIn.x, p.cpIn.y) + Math.hypot(p.cpOut.x, p.cpOut.y)) / 2;
+              const lenIn = Math.hypot(p.cpIn.x, p.cpIn.y);
+              if (lenIn > 0) {
+                p.cpOut.x = -(p.cpIn.x / lenIn) * avgLen;
+                p.cpOut.y = -(p.cpIn.y / lenIn) * avgLen;
+                p.cpIn.x = -p.cpOut.x;
+                p.cpIn.y = -p.cpOut.y;
+              }
+            }
+            break;
+          case 'auto':
+            p.smooth = true;
+            p.symmetric = false;
+            p.auto = true;
+            this.#autoGenerateCP(path, i);
+            break;
         }
       }
     });
@@ -259,7 +297,7 @@ class StateMachine {
     this.#saveState();
   }
 
-  #autoSmooth(path, i) {
+  #autoGenerateCP(path, i) {
     const points = path.points;
     if (i < 0 || i >= points.length) return;
     const p = points[i];
@@ -273,7 +311,6 @@ class StateMachine {
     const lenIn = Math.hypot(dxIn, dyIn) || 1;
     const lenOut = Math.hypot(dxOut, dyOut) || 1;
 
-    // Average tangent
     const tx = (dxIn / lenIn + dxOut / lenOut) / 2;
     const ty = (dyIn / lenIn + dyOut / lenOut) / 2;
     const tLen = Math.hypot(tx, ty) || 1;
@@ -428,11 +465,25 @@ class CorePanel {
         '<span class="node-prop-label">Indices</span>' +
         '<span class="node-prop-value" id="nodeIndices">-</span>' +
       '</div>' +
-      '<div class="node-actions">' +
-        '<button class="panel-btn node-btn" id="nodeSmoothBtn" title="Doux/Coin">' +
-          '<svg viewBox="0 0 24 24"><path d="M3 17c1-2 3-4 5-4s3 3 5 3 4-4 8-4v4c-2 0-4 3-7 3s-3-3-5-3-4 3-6 4V17z"/></svg>' +
-          '<span class="btn-label">Doux</span>' +
+      '<div class="node-type-selector" id="nodeTypeSelector">' +
+        '<button class="node-type-btn active" data-node-type="corner" title="Coin">' +
+          '<svg viewBox="0 0 24 24"><path d="M4 4l6 16 4-8 8-4z"/></svg>' +
+          '<span class="btn-label">Coin</span>' +
         '</button>' +
+        '<button class="node-type-btn" data-node-type="smooth" title="Lisse">' +
+          '<svg viewBox="0 0 24 24"><path d="M3 17c1-2 3-4 5-4s3 3 5 3 4-4 8-4v4c-2 0-4 3-7 3s-3-3-5-3-4 3-6 4V17z"/></svg>' +
+          '<span class="btn-label">Lisse</span>' +
+        '</button>' +
+        '<button class="node-type-btn" data-node-type="symmetric" title="Symétrique">' +
+          '<svg viewBox="0 0 24 24"><path d="M3 17c2-3 4-5 6-5s4 4 5 4 3-4 5-4v0c-2 0-4 4-5 4s-3-4-5-4-4 3-6 5z"/></svg>' +
+          '<span class="btn-label">Symétrique</span>' +
+        '</button>' +
+        '<button class="node-type-btn" data-node-type="auto" title="Auto">' +
+          '<svg viewBox="0 0 24 24"><path d="M12 2l3 7h7l-5.5 4 2 7L12 16l-6.5 4 2-7L2 9h7z"/></svg>' +
+          '<span class="btn-label">Auto</span>' +
+        '</button>' +
+      '</div>' +
+      '<div class="node-actions">' +
         '<button class="panel-btn node-btn" id="nodeDeleteBtn" title="Supprimer">' +
           '<svg viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>' +
           '<span class="btn-label">Supprimer</span>' +
@@ -444,9 +495,14 @@ class CorePanel {
       '</div>';
     panel.appendChild(sectionNode);
 
-    sectionNode.querySelector('#nodeSmoothBtn').addEventListener('click', () => {
-      this.#stateMachine.toggleSmoothForSelected();
+    // Node type selector
+    sectionNode.querySelectorAll('.node-type-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const type = btn.dataset.nodeType;
+        this.#stateMachine.setNodeTypeForSelected(type);
+      });
     });
+
     sectionNode.querySelector('#nodeDeleteBtn').addEventListener('click', () => {
       this.#stateMachine.deleteSelectedNodes();
     });
@@ -607,6 +663,41 @@ class CorePanel {
     const indices = document.getElementById('nodeIndices');
     if (count) count.textContent = nodes.length;
     if (indices) indices.textContent = nodes.sort((a, b) => a - b).join(', ');
+
+    // Sync node type selector
+    this.#syncNodeTypeSelector();
+  }
+
+  #syncNodeTypeSelector() {
+    const path = this.#stateMachine.selectedPath;
+    if (!path) return;
+    const nodes = this.#stateMachine.selectedNodes;
+    if (nodes.length === 0) return;
+
+    // Determine the dominant node type among selected nodes
+    const counts = { corner: 0, smooth: 0, symmetric: 0, auto: 0 };
+    nodes.forEach(i => {
+      if (i < 0 || i >= path.points.length) return;
+      const p = path.points[i];
+      if (p.auto) counts.auto++;
+      else if (p.symmetric) counts.symmetric++;
+      else if (p.smooth) counts.smooth++;
+      else counts.corner++;
+    });
+
+    // Find dominant type
+    let dominant = 'corner';
+    let maxCount = 0;
+    for (const [type, count] of Object.entries(counts)) {
+      if (count > maxCount) { maxCount = count; dominant = type; }
+    }
+
+    // Update button states
+    const selector = document.getElementById('nodeTypeSelector');
+    if (!selector) return;
+    selector.querySelectorAll('.node-type-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.nodeType === dominant);
+    });
   }
 }
 
@@ -754,6 +845,8 @@ class DrawArea {
       cpIn: p.cpIn || { x: 0, y: 0 },
       cpOut: p.cpOut || { x: 0, y: 0 },
       smooth: p.smooth !== undefined ? p.smooth : false,
+      symmetric: p.symmetric !== undefined ? p.symmetric : false,
+      auto: p.auto !== undefined ? p.auto : false,
     };
   }
 
@@ -1095,10 +1188,30 @@ class DrawArea {
         // Smooth: mirror the other control point
         if (cpType === 'cpIn') {
           node.cpIn = cpOffsetDoc;
-          node.cpOut = { x: -cpOffsetDoc.x, y: -cpOffsetDoc.y };
+          if (node.symmetric) {
+            // Symmetric: exact opposite, same length
+            node.cpOut = { x: -cpOffsetDoc.x, y: -cpOffsetDoc.y };
+          } else {
+            // Smooth: colinear but keep original length for cpOut
+            const lenOut = Math.hypot(node.cpOut.x, node.cpOut.y);
+            const lenIn = Math.hypot(cpOffsetDoc.x, cpOffsetDoc.y);
+            if (lenIn > 0) {
+              node.cpOut.x = (cpOffsetDoc.x / lenIn) * lenOut;
+              node.cpOut.y = (cpOffsetDoc.y / lenIn) * lenOut;
+            }
+          }
         } else {
           node.cpOut = cpOffsetDoc;
-          node.cpIn = { x: -cpOffsetDoc.x, y: -cpOffsetDoc.y };
+          if (node.symmetric) {
+            node.cpIn = { x: -cpOffsetDoc.x, y: -cpOffsetDoc.y };
+          } else {
+            const lenIn = Math.hypot(node.cpIn.x, node.cpIn.y);
+            const lenOut = Math.hypot(cpOffsetDoc.x, cpOffsetDoc.y);
+            if (lenOut > 0) {
+              node.cpIn.x = (cpOffsetDoc.x / lenOut) * lenIn;
+              node.cpIn.y = (cpOffsetDoc.y / lenOut) * lenIn;
+            }
+          }
         }
       } else {
         // Corner: only move the dragged control point
