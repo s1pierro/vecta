@@ -1254,24 +1254,25 @@ class DrawArea {
   }
 
   /**
-   * Sélectionne les nœuds dont la position écran est dans la boîte de sélection.
+   * Sélectionne les nœuds dont la position est dans la boîte de sélection.
    */
   _selectNodesInBBox() {
     if (!this._nodeSelBBoxStart || !this._nodeSelBBoxCurrent) return;
-    const sx1 = Math.min(this._nodeSelBBoxStart.x, this._nodeSelBBoxCurrent.x);
-    const sy1 = Math.min(this._nodeSelBBoxStart.y, this._nodeSelBBoxCurrent.y);
-    const sx2 = Math.max(this._nodeSelBBoxStart.x, this._nodeSelBBoxCurrent.x);
-    const sy2 = Math.max(this._nodeSelBBoxStart.y, this._nodeSelBBoxCurrent.y);
+    // _nodeSelBBoxStart/Current are in document coordinates (from screenToDoc)
+    const x1 = Math.min(this._nodeSelBBoxStart.x, this._nodeSelBBoxCurrent.x);
+    const y1 = Math.min(this._nodeSelBBoxStart.y, this._nodeSelBBoxCurrent.y);
+    const x2 = Math.max(this._nodeSelBBoxStart.x, this._nodeSelBBoxCurrent.x);
+    const y2 = Math.max(this._nodeSelBBoxStart.y, this._nodeSelBBoxCurrent.y);
 
-    if (sx2 - sx1 < 5 && sy2 - sy1 < 5) return;
+    if (x2 - x1 < 5 && y2 - y1 < 5) return; // too small, was a tap
 
     const path = this.#stateMachine.selectedPath;
     if (!path) return;
 
     const selected = [];
     path.points.forEach((p, i) => {
-      const sp = this.#docToScreen(p.x, p.y);
-      if (sp.x >= sx1 && sp.x <= sx2 && sp.y >= sy1 && sp.y <= sy2) {
+      // path points are stored in document coordinates
+      if (p.x >= x1 && p.x <= x2 && p.y >= y1 && p.y <= y2) {
         selected.push(i);
       }
     });
