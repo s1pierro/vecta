@@ -2,6 +2,141 @@ const APP_NAME = 'Vecta';
 const APP_VERSION = '0.1';
 
 /**
+ * State — a declarative definition of an application state.
+ *
+ * Describes:
+ * - Identity (name, type, family, tags)
+ * - Mutual exclusion via exclusiveFields
+ * - Activation / maintain / deactivation conditions
+ * - Lifecycle hooks (onEnter, onExit, onMaintain)
+ * - Priority for conflict resolution
+ */
+class State {
+  #name;
+  #type;
+  #family;
+  #exclusiveFields;
+  #priority;
+  #activationCondition;
+  #maintainCondition;
+  #deactivationCondition;
+  #onEnter;
+  #onExit;
+  #onMaintain;
+  #tags;
+  #meta;
+
+  constructor(config = {}) {
+    if (!config.name) throw new Error('State must have a name');
+    this.#name = config.name;
+    this.#type = config.type || 'generic';
+    this.#family = config.family || '';
+    this.#exclusiveFields = Array.isArray(config.exclusiveFields) ? [...config.exclusiveFields] : [];
+    this.#priority = typeof config.priority === 'number' ? config.priority : 0;
+
+    // Conditions — return true by default (no restriction)
+    this.#activationCondition = config.activationCondition || null;
+    this.#maintainCondition = config.maintainCondition || null;
+    this.#deactivationCondition = config.deactivationCondition || null;
+
+    // Lifecycle hooks
+    this.#onEnter = config.onEnter || null;
+    this.#onExit = config.onExit || null;
+    this.#onMaintain = config.onMaintain || null;
+
+    // Metadata
+    this.#tags = Array.isArray(config.tags) ? [...config.tags] : [];
+    this.#meta = config.meta || {};
+  }
+
+  // ── Getters ──
+  get name() { return this.#name; }
+  get type() { return this.#type; }
+  get family() { return this.#family; }
+  get exclusiveFields() { return [...this.#exclusiveFields]; }
+  get priority() { return this.#priority; }
+  get tags() { return [...this.#tags]; }
+  get meta() { return { ...this.#meta }; }
+
+  /**
+   * Check if this state can activate given the current machine context.
+   * @param {object} ctx — machine context (state, helpers, etc.)
+   * @returns {boolean}
+   */
+  canActivate(ctx) {
+    return this.#activationCondition ? this.#activationCondition(ctx) : true;
+  }
+
+  /**
+   * Check if this state should remain active.
+   * @param {object} ctx
+   * @returns {boolean}
+   */
+  shouldMaintain(ctx) {
+    return this.#maintainCondition ? this.#maintainCondition(ctx) : true;
+  }
+
+  /**
+   * Check if this state should deactivate.
+   * @param {object} ctx
+   * @returns {boolean}
+   */
+  shouldDeactivate(ctx) {
+    return this.#deactivationCondition ? this.#deactivationCondition(ctx) : false;
+  }
+
+  /**
+   * Enter hook.
+   * @param {object} ctx
+   */
+  enter(ctx) {
+    if (this.#onEnter) this.#onEnter(ctx);
+  }
+
+  /**
+   * Exit hook.
+   * @param {object} ctx
+   */
+  exit(ctx) {
+    if (this.#onExit) this.#onExit(ctx);
+  }
+
+  /**
+   * Maintain tick.
+   * @param {object} ctx
+   * @param {number} dt — delta time
+   */
+  maintain(ctx, dt) {
+    if (this.#onMaintain) this.#onMaintain(ctx, dt);
+  }
+
+  /**
+   * Check if this state shares an exclusive field with another state.
+   * @param {State} other
+   * @returns {string[]} — list of conflicting exclusive fields
+   */
+  getExclusiveConflicts(other) {
+    if (!(other instanceof State)) return [];
+    return this.#exclusiveFields.filter(f => other.exclusiveFields.includes(f));
+  }
+
+  /**
+   * Return a plain serializable representation.
+   */
+  toJSON() {
+    return {
+      name: this.#name,
+      type: this.#type,
+      family: this.#family,
+      exclusiveFields: this.#exclusiveFields,
+      priority: this.#priority,
+      tags: this.#tags,
+      meta: this.#meta
+    };
+  }
+}
+
+/**
  * Selection types — what kind of entity is being selected.
  */
 const SelectionType = Object.freeze({
