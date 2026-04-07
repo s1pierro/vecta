@@ -457,8 +457,8 @@ class DrawArea {
   #panX = 0;
   #panY = 0;
   #zoom = 1;
-  readonly #DOC_W = 2970;
-  readonly #DOC_H = 2100;
+  #DOC_W = 2970;
+  #DOC_H = 2100;
 
   constructor(stateMachine) {
     this.#stateMachine = stateMachine;
@@ -518,21 +518,19 @@ class DrawArea {
   }
 
   /**
-   * Convertit les coordonnées écran (relatives au container) en coordonnées document SVG.
-   * Prend en compte le pan et le zoom.
+   * Convertit les coordonnées relatives à l'overlay tactile en coordonnées document SVG.
+   * Prend en compte le pan, le zoom et le letterboxing du SVG.
    */
-  #screenToDoc(screenX, screenY) {
-    if (!this.#svg) return { x: screenX, y: screenY };
-    const rect = this.#svg.getBoundingClientRect();
-    const px = screenX - rect.left;
-    const py = screenY - rect.top;
-    const vw = rect.width;
-    const vh = rect.height;
-    const viewBoxW = this.#DOC_W / this.#zoom;
-    const viewBoxH = this.#DOC_H / this.#zoom;
-    const docX = this.#panX + (px / vw) * viewBoxW;
-    const docY = this.#panY + (py / vh) * viewBoxH;
-    return { x: docX, y: docY };
+  #screenToDoc(overlayRelX, overlayRelY) {
+    const svg = this.#svg;
+    const overlayRect = this.#touchOverlay.getBoundingClientRect();
+    const pt = svg.createSVGPoint();
+    pt.x = overlayRelX + overlayRect.left;
+    pt.y = overlayRelY + overlayRect.top;
+    const ctm = svg.getScreenCTM();
+    if (!ctm) return { x: overlayRelX, y: overlayRelY };
+    const docPt = pt.matrixTransform(ctm.inverse());
+    return { x: docPt.x, y: docPt.y };
   }
 
   /**
