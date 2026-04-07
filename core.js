@@ -226,7 +226,7 @@ class StateMachine {
       if (aIdx + 1 < bIdx) continue; // already have nodes between
       const a = path.points[aIdx];
       const b = path.points[aIdx + 1];
-      const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+      const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, cpIn: { x: 0, y: 0 }, cpOut: { x: 0, y: 0 }, smooth: false };
       path.points.splice(aIdx + 1, 0, mid);
       newIndices.push(aIdx + 1);
       offset++;
@@ -235,6 +235,54 @@ class StateMachine {
     this.#emit('pathsChange', this.#state.paths);
     this.#emit('selectedNodesChange', this.#state.selectedNodes);
     this.#saveState();
+  }
+
+  toggleSmoothForSelected() {
+    if (!this.#state.selectedPath || this.#state.selectedNodes.length === 0) return;
+    const path = this.#state.selectedPath;
+    path.points.forEach((p, i) => {
+      if (this.#state.selectedNodes.includes(i)) {
+        // Normalize first
+        p.cpIn = p.cpIn || { x: 0, y: 0 };
+        p.cpOut = p.cpOut || { x: 0, y: 0 };
+        p.smooth = !p.smooth;
+        if (p.smooth && (p.cpIn.x === 0 && p.cpIn.y === 0 && p.cpOut.x === 0 && p.cpOut.y === 0)) {
+          // Auto-generate control points for newly smoothed node
+          this.#autoSmooth(path, i);
+        } else if (!p.smooth) {
+          // Converting to corner: keep control points but they're now independent
+          // No change needed, they just become independent
+        }
+      }
+    });
+    this.#emit('pathsChange', this.#state.paths);
+    this.#saveState();
+  }
+
+  #autoSmooth(path, i) {
+    const points = path.points;
+    if (i < 0 || i >= points.length) return;
+    const p = points[i];
+    const prev = points[i > 0 ? i - 1 : null];
+    const next = points[i < points.length - 1 ? i + 1 : null];
+    if (!prev || !next) return;
+
+    const tension = 0.3;
+    const dxIn = p.x - prev.x, dyIn = p.y - prev.y;
+    const dxOut = next.x - p.x, dyOut = next.y - p.y;
+    const lenIn = Math.hypot(dxIn, dyIn) || 1;
+    const lenOut = Math.hypot(dxOut, dyOut) || 1;
+
+    // Average tangent
+    const tx = (dxIn / lenIn + dxOut / lenOut) / 2;
+    const ty = (dyIn / lenIn + dyOut / lenOut) / 2;
+    const tLen = Math.hypot(tx, ty) || 1;
+
+    const dIn = Math.min(lenIn * tension, 50);
+    const dOut = Math.min(lenOut * tension, 50);
+
+    p.cpIn = { x: -(tx / tLen) * dIn, y: -(ty / tLen) * dIn };
+    p.cpOut = { x: (tx / tLen) * dOut, y: (ty / tLen) * dOut };
   }
 
   clearCanvas() {
@@ -381,6 +429,10 @@ class CorePanel {
         '<span class="node-prop-value" id="nodeIndices">-</span>' +
       '</div>' +
       '<div class="node-actions">' +
+        '<button class="panel-btn node-btn" id="nodeSmoothBtn" title="Doux/Coin">' +
+          '<svg viewBox="0 0 24 24"><path d="M3 17c1-2 3-4 5-4s3 3 5 3 4-4 8-4v4c-2 0-4 3-7 3s-3-3-5-3-4 3-6 4V17z"/></svg>' +
+          '<span class="btn-label">Doux</span>' +
+        '</button>' +
         '<button class="panel-btn node-btn" id="nodeDeleteBtn" title="Supprimer">' +
           '<svg viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>' +
           '<span class="btn-label">Supprimer</span>' +
@@ -392,6 +444,9 @@ class CorePanel {
       '</div>';
     panel.appendChild(sectionNode);
 
+    sectionNode.querySelector('#nodeSmoothBtn').addEventListener('click', () => {
+      this.#stateMachine.toggleSmoothForSelected();
+    });
     sectionNode.querySelector('#nodeDeleteBtn').addEventListener('click', () => {
       this.#stateMachine.deleteSelectedNodes();
     });
@@ -687,11 +742,45 @@ class DrawArea {
     this._redrawSelection();
   }
 
+  /**
+   * Normalize a point to ensure it has cpIn/cpOut/smooth properties.
+   * cpIn and cpOut are RELATIVE offsets from the node position.
+   * @param {object} p - {x, y, cpIn?, cpOut?, smooth?}
+   * @returns {object} normalized point
+   */
+  _normalizePoint(p) {
+    return {
+      x: p.x, y: p.y,
+      cpIn: p.cpIn || { x: 0, y: 0 },
+      cpOut: p.cpOut || { x: 0, y: 0 },
+      smooth: p.smooth !== undefined ? p.smooth : false,
+    };
+  }
+
+  /**
+   * Convert an array of points to an SVG path d-string using cubic Bezier curves.
+   * Points without control points (cpIn/cpOut = 0) render as straight lines.
+   */
   #pointsToSvgPath(points) {
     if (!points || points.length < 2) return '';
     let d = `M ${points[0].x} ${points[0].y}`;
     for (let i = 1; i < points.length; i++) {
-      d += ` L ${points[i].x} ${points[i].y}`;
+      const prev = points[i - 1];
+      const curr = points[i];
+      const cpOut = prev.cpOut || { x: 0, y: 0 };
+      const cpIn = curr.cpIn || { x: 0, y: 0 };
+
+      if (cpOut.x === 0 && cpOut.y === 0 && cpIn.x === 0 && cpIn.y === 0) {
+        // No control points — straight line
+        d += ` L ${curr.x} ${curr.y}`;
+      } else {
+        // Cubic Bezier: control points are absolute (node position + relative offset)
+        const cp1x = prev.x + cpOut.x;
+        const cp1y = prev.y + cpOut.y;
+        const cp2x = curr.x + cpIn.x;
+        const cp2y = curr.y + cpIn.y;
+        d += ` C ${cp1x} ${cp1y} ${cp2x} ${cp2y} ${curr.x} ${curr.y}`;
+      }
     }
     return d;
   }
@@ -776,7 +865,13 @@ class DrawArea {
       return;
     }
 
-    const bbox = this.#computeBBox(selectedPath.points);
+    const points = selectedPath.points;
+    const selectedNodes = this.#stateMachine.selectedNodes;
+
+    // Normalize all points to have cpIn/cpOut/smooth
+    points.forEach((p, i) => { points[i] = this._normalizePoint(p); });
+
+    const bbox = this.#computeBBox(points);
     const padding = 4;
     const tl = this.#docToScreen(bbox.minX - padding, bbox.minY - padding);
     const br = this.#docToScreen(bbox.maxX + padding, bbox.maxY + padding);
@@ -796,17 +891,16 @@ class DrawArea {
       rect.setAttribute('pointer-events', 'none');
       this.#svgUI.appendChild(rect);
 
-      // BBox handles
       const handleSize = 10;
       const handles = [
-        { name: 'n',  cx: (tl.x + br.x) / 2, cy: tl.y, cursor: 'ns-resize' },
-        { name: 's',  cx: (tl.x + br.x) / 2, cy: br.y, cursor: 'ns-resize' },
-        { name: 'w',  cx: tl.x, cy: (tl.y + br.y) / 2, cursor: 'ew-resize' },
-        { name: 'e',  cx: br.x, cy: (tl.y + br.y) / 2, cursor: 'ew-resize' },
-        { name: 'nw', cx: tl.x, cy: tl.y, cursor: 'nwse-resize' },
-        { name: 'ne', cx: br.x, cy: tl.y, cursor: 'nesw-resize' },
-        { name: 'sw', cx: tl.x, cy: br.y, cursor: 'nesw-resize' },
-        { name: 'se', cx: br.x, cy: br.y, cursor: 'nwse-resize' },
+        { name: 'n',  cx: (tl.x + br.x) / 2, cy: tl.y },
+        { name: 's',  cx: (tl.x + br.x) / 2, cy: br.y },
+        { name: 'w',  cx: tl.x, cy: (tl.y + br.y) / 2 },
+        { name: 'e',  cx: br.x, cy: (tl.y + br.y) / 2 },
+        { name: 'nw', cx: tl.x, cy: tl.y },
+        { name: 'ne', cx: br.x, cy: tl.y },
+        { name: 'sw', cx: tl.x, cy: br.y },
+        { name: 'se', cx: br.x, cy: br.y },
       ];
 
       handles.forEach(h => {
@@ -823,38 +917,91 @@ class DrawArea {
         this.#svgUI.appendChild(el);
       });
 
-      // BBox handles stored for hit detection
       this._bboxHandleCenters = handles;
     } else {
       this._bboxHandleCenters = [];
     }
 
-    // Node handles
+    // Build handle list: node circles + control point diamonds
     const nodeRadius = 5;
-    const points = selectedPath.points;
-    const selectedNodes = this.#stateMachine.selectedNodes;
+    const cpSize = 7; // diamond half-size
     const nodeHandles = [];
+    const allHandles = [];
+
     points.forEach((p, i) => {
       const sp = this.#docToScreen(p.x, p.y);
+      const isSelected = selectedNodes.includes(i);
+
+      // Node circle
       const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
       c.setAttribute('cx', sp.x);
       c.setAttribute('cy', sp.y);
       c.setAttribute('r', nodeRadius);
-      c.setAttribute('fill', selectedNodes.includes(i) ? '#69f0ae' : '#4fc3f7');
-      c.setAttribute('stroke', selectedNodes.includes(i) ? '#fff' : '#fff');
+      c.setAttribute('fill', isSelected ? '#69f0ae' : '#4fc3f7');
+      c.setAttribute('stroke', isSelected ? '#fff' : '#fff');
       c.setAttribute('stroke-width', '2');
       c.setAttribute('pointer-events', 'none');
       this.#svgUI.appendChild(c);
       nodeHandles.push({ name: `node:${i}`, x: sp.x, y: sp.y });
+
+      // For SELECTED nodes: show control point handles and lines
+      if (isSelected && (p.cpIn || p.cpOut || p.smooth)) {
+        const cpIn = p.cpIn || { x: 0, y: 0 };
+        const cpOut = p.cpOut || { x: 0, y: 0 };
+        const hasCpIn = cpIn.x !== 0 || cpIn.y !== 0;
+        const hasCpOut = cpOut.x !== 0 || cpOut.y !== 0;
+
+        if (hasCpIn || hasCpOut) {
+          // Control point lines
+          if (hasCpIn) {
+            const cpInScreen = this.#docToScreen(p.x + cpIn.x, p.y + cpIn.y);
+            const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            line.setAttribute('x1', sp.x); line.setAttribute('y1', sp.y);
+            line.setAttribute('x2', cpInScreen.x); line.setAttribute('y2', cpInScreen.y);
+            line.setAttribute('stroke', '#ffa726');
+            line.setAttribute('stroke-width', '1.5');
+            line.setAttribute('pointer-events', 'none');
+            this.#svgUI.appendChild(line);
+
+            // cpIn diamond
+            const d = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+            const pts = `${cpInScreen.x},${cpInScreen.y - cpSize} ${cpInScreen.x + cpSize},${cpInScreen.y} ${cpInScreen.x},${cpInScreen.y + cpSize} ${cpInScreen.x - cpSize},${cpInScreen.y}`;
+            d.setAttribute('points', pts);
+            d.setAttribute('fill', '#ffa726');
+            d.setAttribute('stroke', '#fff');
+            d.setAttribute('stroke-width', '1.5');
+            d.setAttribute('pointer-events', 'none');
+            this.#svgUI.appendChild(d);
+            allHandles.push({ name: `cpIn:${i}`, x: cpInScreen.x, y: cpInScreen.y });
+          }
+
+          if (hasCpOut) {
+            const cpOutScreen = this.#docToScreen(p.x + cpOut.x, p.y + cpOut.y);
+            const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            line.setAttribute('x1', sp.x); line.setAttribute('y1', sp.y);
+            line.setAttribute('x2', cpOutScreen.x); line.setAttribute('y2', cpOutScreen.y);
+            line.setAttribute('stroke', '#ffa726');
+            line.setAttribute('stroke-width', '1.5');
+            line.setAttribute('pointer-events', 'none');
+            this.#svgUI.appendChild(line);
+
+            // cpOut diamond
+            const d = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+            const pts = `${cpOutScreen.x},${cpOutScreen.y - cpSize} ${cpOutScreen.x + cpSize},${cpOutScreen.y} ${cpOutScreen.x},${cpOutScreen.y + cpSize} ${cpOutScreen.x - cpSize},${cpOutScreen.y}`;
+            d.setAttribute('points', pts);
+            d.setAttribute('fill', '#ffa726');
+            d.setAttribute('stroke', '#fff');
+            d.setAttribute('stroke-width', '1.5');
+            d.setAttribute('pointer-events', 'none');
+            this.#svgUI.appendChild(d);
+            allHandles.push({ name: `cpOut:${i}`, x: cpOutScreen.x, y: cpOutScreen.y });
+          }
+        }
+      }
     });
 
-    const allHandles = nodeHandles;
-    if (this.#stateMachine.selectables === 'nodes') {
-      const handles = this.#svgUI.querySelectorAll('[data-handle]');
-      // BBox handles already added above
-    }
-    this._handleCenters = nodeHandles;
-    this._handleHitRadius = nodeRadius * 2.5;
+    this._handleCenters = [...nodeHandles, ...allHandles];
+    this._handleHitRadius = Math.max(nodeRadius, cpSize) * 2.5;
   }
 
   /**
@@ -868,7 +1015,10 @@ class DrawArea {
     if (!path) return;
 
     this._handleDragHandle = handleName;
-    this._handleDragOrigPoints = path.points.map(p => ({ x: p.x, y: p.y }));
+    this._handleDragOrigPoints = path.points.map(p => {
+      const np = this._normalizePoint(p);
+      return { ...np, cpIn: { ...np.cpIn }, cpOut: { ...np.cpOut } };
+    });
     this._handleDragOrigBBox = this.#computeBBox(path.points);
     this._handleDragStartDoc = doc;
 
@@ -920,15 +1070,63 @@ class DrawArea {
     const path = this.#stateMachine.selectedPath;
     if (!path) return;
 
-    // Cas spécial : déplacement d'un nœud individuel
-    if (this._handleDragHandle.startsWith('node:')) {
-      const nodeIndex = parseInt(this._handleDragHandle.split(':')[1], 10);
+    // Normalize points
+    path.points.forEach((p, i) => { path.points[i] = this._normalizePoint(p); });
+
+    // Control point drag
+    const cpMatch = this._handleDragHandle.match(/^cp(In|Out):(\d+)$/);
+    if (cpMatch) {
+      const cpType = cpMatch[1]; // 'cpIn' or 'cpOut'
+      const nodeIndex = parseInt(cpMatch[2], 10);
       if (isNaN(nodeIndex) || nodeIndex >= path.points.length) return;
-      path.points[nodeIndex] = { x: newDocPos.x, y: newDocPos.y };
+
+      const node = path.points[nodeIndex];
+      const nodeScreen = this.#docToScreen(node.x, node.y);
+      const cpScreen = this.#docToScreen(newDocPos.x, newDocPos.y);
+
+      // Control point offset in screen coords
+      const cpOffsetScreen = { x: cpScreen.x - nodeScreen.x, y: cpScreen.y - nodeScreen.y };
+      // Convert back to document coords (relative offset scales with zoom)
+      const ctm = this.#svg.getScreenCTM();
+      const scale = ctm ? ctm.a : 1;
+      const cpOffsetDoc = { x: cpOffsetScreen.x / scale, y: cpOffsetScreen.y / scale };
+
+      if (node.smooth) {
+        // Smooth: mirror the other control point
+        if (cpType === 'cpIn') {
+          node.cpIn = cpOffsetDoc;
+          node.cpOut = { x: -cpOffsetDoc.x, y: -cpOffsetDoc.y };
+        } else {
+          node.cpOut = cpOffsetDoc;
+          node.cpIn = { x: -cpOffsetDoc.x, y: -cpOffsetDoc.y };
+        }
+      } else {
+        // Corner: only move the dragged control point
+        node[cpType] = cpOffsetDoc;
+      }
+
       this.#stateMachine.updateSelectedPath({ points: path.points });
       return;
     }
 
+    // Node drag: move the node AND its control points together
+    if (this._handleDragHandle.startsWith('node:')) {
+      const nodeIndex = parseInt(this._handleDragHandle.split(':')[1], 10);
+      if (isNaN(nodeIndex) || nodeIndex >= path.points.length) return;
+
+      const origPoint = this._handleDragOrigPoints[nodeIndex];
+      const node = path.points[nodeIndex];
+      node.x = newDocPos.x;
+      node.y = newDocPos.y;
+      // Control points are relative offsets, keep original values
+      node.cpIn = { x: origPoint.cpIn?.x || 0, y: origPoint.cpIn?.y || 0 };
+      node.cpOut = { x: origPoint.cpOut?.x || 0, y: origPoint.cpOut?.y || 0 };
+
+      this.#stateMachine.updateSelectedPath({ points: path.points });
+      return;
+    }
+
+    // BBox deformation (unchanged)
     const orig = this._handleDragOrigPoints;
     const bbox = this._handleDragOrigBBox;
     const handle = this._handleDragHandle;
@@ -1009,10 +1207,17 @@ class DrawArea {
       }
     }
 
-    path.points = orig.map(p => ({
-      x: doX ? anchorX + (p.x - anchorX) * scaleX : p.x,
-      y: doY ? anchorY + (p.y - anchorY) * scaleY : p.y,
-    }));
+    path.points = orig.map(p => {
+      const np = this._normalizePoint(p);
+      const scaled = {
+        x: doX ? anchorX + (p.x - anchorX) * scaleX : p.x,
+        y: doY ? anchorY + (p.y - anchorY) * scaleY : p.y,
+        cpIn: { x: np.cpIn.x * scaleX, y: np.cpIn.y * scaleY },
+        cpOut: { x: np.cpOut.x * scaleX, y: np.cpOut.y * scaleY },
+        smooth: np.smooth,
+      };
+      return scaled;
+    });
     this.#stateMachine.updateSelectedPath({ points: path.points });
   }
 
@@ -1126,20 +1331,25 @@ class DrawArea {
           // nodes/nodeSelection mode: select/deselect individual node by tap
           const sx = e.x;
           const sy = e.y;
-          let hitNode = null;
+          let hitHandle = null;
           let minDist = Infinity;
           if (this._handleCenters) {
             for (const h of this._handleCenters) {
               const d = Math.hypot(sx - h.x, sy - h.y);
-              if (d < minDist) { minDist = d; hitNode = h; }
+              if (d < minDist) { minDist = d; hitHandle = h; }
             }
           }
-          if (hitNode && hitNode.name.startsWith('node:')) {
-            const idx = parseInt(hitNode.name.split(':')[1], 10);
+          // Determine node index from handle name (node:N, cpIn:N, cpOut:N)
+          let nodeIdx = -1;
+          if (hitHandle) {
+            const parts = hitHandle.name.split(':');
+            nodeIdx = parseInt(parts[1], 10);
+          }
+          if (nodeIdx >= 0) {
             const nodes = this.#stateMachine.selectedNodes;
-            const i = nodes.indexOf(idx);
+            const i = nodes.indexOf(nodeIdx);
             if (i >= 0) nodes.splice(i, 1);
-            else nodes.push(idx);
+            else nodes.push(nodeIdx);
             this.#stateMachine.selectedNodes = [...nodes];
           } else {
             this.#stateMachine.selectedNodes = [];
