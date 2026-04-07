@@ -615,25 +615,17 @@
     .jec-bool input {
       accent-color: #4fc3f7;
     }
-    /* Size selector magnetic slider */
-    .size-selector-container {
-      user-select: none;
-      width: 100% !important;
-      box-sizing: border-box;
+    /* Size selector button grid */
+    .size-btn {
+      padding: 0 !important;
     }
-    .size-track {
-      width: 100% !important;
-      box-sizing: border-box;
-    }
-    .size-value-display {
-      width: 100% !important;
-      box-sizing: border-box;
-      margin-bottom: 4px;
-    }
-    .size-circle.active {
-      background: rgba(79,195,247,0.2) !important;
+    .size-btn.active {
+      background: rgba(79,195,247,0.1) !important;
       border-color: #4fc3f7 !important;
-      box-shadow: 0 0 6px rgba(79,195,247,0.4);
+      box-shadow: 0 0 8px rgba(79,195,247,0.3);
+    }
+    .size-btn.active div {
+      background: #4fc3f7 !important;
     }
     .topbar-win-list-gnome2 {
       display: flex;

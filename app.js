@@ -610,68 +610,55 @@ class Application {
     const sizeContentFn = () => {
       const body = document.createElement('div');
       body.className = 'size-selector-container';
-      body.style.cssText = 'display:flex;flex-direction:column;gap:12px;padding:12px;min-width:200px;box-sizing:border-box;';
+      body.style.cssText = 'display:flex;flex-direction:column;gap:12px;padding:12px;box-sizing:border-box;';
 
       const sizes = [2, 4, 6, 8, 10, 14, 20, 28];
-      const minSize = sizes[0];
-      const maxSize = sizes[sizes.length - 1];
 
-      // Value display
-      const valueDisplay = document.createElement('div');
-      valueDisplay.className = 'size-value-display';
-      valueDisplay.style.cssText = 'text-align:center;font-size:0.8em;color:#4fc3f7;font-family:monospace;width:100%;';
-      valueDisplay.textContent = this.#statesMachine.currentSize + 'px';
-      body.appendChild(valueDisplay);
+      // Grid of size buttons
+      const grid = document.createElement('div');
+      grid.className = 'size-grid';
+      grid.style.cssText = 'display:grid;grid-template-columns:repeat(4,1fr);gap:10px;';
 
-      // Slider track
-      const track = document.createElement('div');
-      track.className = 'size-track';
-      track.style.cssText = 'position:relative;height:50px;display:flex;align-items:center;flex:1;min-width:0;';
-
-      // Tick marks + circles
       sizes.forEach((size) => {
-        const pct = ((size - minSize) / (maxSize - minSize)) * 100;
-        const tick = document.createElement('div');
-        tick.className = 'size-tick';
-        tick.style.cssText = `position:absolute;left:${pct}%;display:flex;flex-direction:column;align-items:center;transform:translateX(-50%);`;
+        const btn = document.createElement('button');
+        btn.className = 'size-btn' + (this.#statesMachine.currentSize === size ? ' active' : '');
+        btn.dataset.size = size;
+        btn.style.cssText = `
+          display:flex;align-items:center;justify-content:center;
+          width:48px;height:48px;
+          background:rgba(255,255,255,0.04);
+          border:1px solid rgba(255,255,255,0.12);
+          border-radius:6px;
+          cursor:pointer;transition:all 0.15s;
+          justify-self:center;
+        `;
 
-        // Tick line
-        const line = document.createElement('div');
-        line.style.cssText = 'width:1px;height:6px;background:rgba(255,255,255,0.2);';
-        tick.appendChild(line);
-
-        // Size circle
+        // Visual circle
         const circle = document.createElement('div');
-        circle.className = 'size-circle' + (this.#statesMachine.currentSize === size ? ' active' : '');
-        circle.dataset.size = size;
-        const circleSize = Math.max(size, 6);
-        circle.style.cssText = `width:${circleSize + 4}px;height:${circleSize + 4}px;border-radius:50%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);cursor:pointer;transition:all 0.15s;`;
-        circle.addEventListener('click', () => {
+        const displaySize = Math.max(size, 4);
+        circle.style.cssText = `
+          width:${displaySize}px;height:${displaySize}px;
+          border-radius:50%;
+          background:rgba(255,255,255,0.5);
+          transition:all 0.15s;
+        `;
+        btn.appendChild(circle);
+
+        btn.addEventListener('click', () => {
           this.#corePanel.selectSize(size);
         });
-        tick.appendChild(circle);
 
-        track.appendChild(tick);
+        grid.appendChild(btn);
       });
 
-      // Slider thumb
-      const thumb = document.createElement('div');
-      thumb.className = 'size-thumb';
-      const thumbPct = ((this.#statesMachine.currentSize - minSize) / (maxSize - minSize)) * 100;
-      thumb.style.cssText = `position:absolute;left:${thumbPct}%;top:50%;width:14px;height:14px;border-radius:50%;background:#4fc3f7;border:2px solid #fff;transform:translate(-50%,-50%);cursor:pointer;transition:left 0.2s;z-index:2;`;
-      track.appendChild(thumb);
-
-      body.appendChild(track);
+      body.appendChild(grid);
 
       // Subscribe to size changes
       this.#statesMachine.on('sizeChange', (sz) => {
-        valueDisplay.textContent = sz + 'px';
-        const newPct = ((sz - minSize) / (maxSize - minSize)) * 100;
-        thumb.style.left = newPct + '%';
-        // Update circles
-        body.querySelectorAll('.size-circle').forEach(c => c.classList.remove('active'));
-        const activeCircle = body.querySelector(`.size-circle[data-size="${sz}"]`);
-        if (activeCircle) activeCircle.classList.add('active');
+        body.querySelectorAll('.size-btn').forEach(b => {
+          const active = parseInt(b.dataset.size) === sz;
+          b.classList.toggle('active', active);
+        });
       });
 
       return body;
@@ -682,7 +669,7 @@ class Application {
       content: sizeContentFn,
       left: '70vw',
       top: '10vh',
-      width: 'auto',
+      width: '240px',
       height: 'auto'
     });
 
