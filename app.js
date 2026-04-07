@@ -298,34 +298,6 @@ class SubWindowManager {
   get count() { return this.#windows.size; }
 }
 
-class LayoutManager {
-  #corePanel;
-  #drawArea;
-  #appGround;
-
-  constructor(corePanel, drawArea) {
-    this.#corePanel = corePanel;
-    this.#drawArea = drawArea;
-    this.#appGround = document.getElementById('app-ground');
-    this.#init();
-  }
-
-  #init() {
-    window.addEventListener('resize', () => this.#handleResize());
-    this.#handleResize();
-  }
-
-  #handleResize() {
-    const isPortrait = window.matchMedia('(orientation: portrait)').matches;
-    this.applyLayout(isPortrait ? 'portrait' : 'landscape');
-  }
-
-  applyLayout(orientation) {
-    this.#appGround.classList.remove('landscape', 'portrait');
-    this.#appGround.classList.add(orientation);
-  }
-}
-
 class Application {
   #statesMachine;
   #selectionManager;
@@ -333,7 +305,6 @@ class Application {
   #corePanel;
   #drawArea;
   #touchOverlay;
-  #layoutManager;
 
   constructor(options = {}) {
     this.#statesMachine = new StateMachine();
@@ -702,7 +673,6 @@ class Application {
     });
 
     this.#drawArea.bindDrawEvents(this.#touchOverlay);
-    this.#layoutManager = new LayoutManager(this.#corePanel, this.#drawArea);
 
     this.#statesMachine.on('colorChange', () => this.#drawArea._redraw());
     this.#statesMachine.on('sizeChange', () => this.#drawArea._redraw());
@@ -717,12 +687,10 @@ class Application {
     this.#statesMachine.on('colorChange', () => this.#updateStatusBar());
     this.#statesMachine.on('sizeChange', () => this.#updateStatusBar());
     this.#statesMachine.on('selectedPathChange', (path) => {
-      this.#corePanel.syncSelection(path);
       this.#updateStatusBar();
       this.#updateRawStates();
     });
     this.#statesMachine.on('selectedNodesChange', () => {
-      this.#corePanel.syncNodeSelection();
       this.#drawArea._redraw();
       this.#updateRawStates();
     });
@@ -732,11 +700,7 @@ class Application {
     this.#selectionManager.on('stateChange', () => this.#updateRawStates());
     this.#statesMachine.on('currentPathChange', () => this.#updateRawStates());
     this.#statesMachine.on('selectablesChange', () => this.#updateRawStates());
-    this.#statesMachine.on('pathsChange', () => {
-      const path = this.#statesMachine.selectedPath;
-      if (path) this.#corePanel.syncSelection(path);
-      this.#updateRawStates();
-    });
+    this.#statesMachine.on('pathsChange', () => this.#updateRawStates());
     this.#statesMachine.on('historyChange', () => this.#updateHistoryButtons());
 
     // TNT state events

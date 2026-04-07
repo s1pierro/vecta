@@ -1,244 +1,54 @@
 /* ============================
-   CorePanel - Responsive Styles
+   Top Bar — minimal horizontal toolbar
    ============================ */
 
-/* --- Base Styles --- */
 #corePanel {
   position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 40px;
   background: rgba(30, 30, 50, 0.95);
+  backdrop-filter: blur(8px);
   display: flex;
-  z-index: 100;
-  transition: all 0.3s ease;
-  box-sizing: border-box;
-}
-
-#corePanel * {
-  box-sizing: border-box;
-}
-
-/* Sections de base */
-.panel-section {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  width: 100%;
-  flex-shrink: 0;
-}
-
-/* Header Section */
-.panel-section-header {
-  height: 44px;
-  flex: 0 0 44px;
-}
-
-/* Header content */
-.panel-header {
-  display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 8px;
-  width: 100%;
+  z-index: 200;
+  padding: 0 8px;
+  gap: 4px;
 }
 
-.panel-app-info {
+.topbar {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  font-size: 10px;
-  color: rgba(255, 255, 255, 0.6);
+  gap: 4px;
+  flex: 0 0 auto;
 }
 
-.app-name {
-  font-weight: bold;
-  color: #fff;
-}
-
-.app-version {
-  font-size: 9px;
-}
-
-/* Buttons */
-.panel-btn {
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
-  border: 2px solid rgba(255, 255, 255, 0.2);
-  background: rgba(255, 255, 255, 0.05);
+.topbar-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.04);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  color: rgba(255, 255, 255, 0.6);
+  transition: all 0.15s;
 }
 
-.panel-btn svg {
-  width: 20px;
-  height: 20px;
-  stroke: #fff;
-  fill: none;
-  stroke-width: 2;
+.topbar-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
 }
 
-.panel-btn:disabled {
+.topbar-btn:disabled {
   opacity: 0.3;
   cursor: not-allowed;
 }
 
-.panel-btn:disabled svg {
-  stroke: rgba(255, 255, 255, 0.3);
-}
-
-/* Tools Section */
-.panel-section-tool {
-  height: auto;
-  flex: 0 0 auto;
-}
-
-/* Selection Properties Section */
-.panel-section-selection {
-  height: auto;
-  flex: 0 0 auto;
-  padding: 8px 12px;
-  gap: 8px;
-  display: none;
-  flex-direction: column;
-}
-
-.panel-section-selection.visible {
-  display: flex;
-}
-
-.selection-info {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.selection-info > div {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  align-items: center;
-}
-
-.selection-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.simplify-control {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.simplify-control .selection-prop-label {
-  flex-shrink: 0;
-}
-
-.simplify-control .selection-prop-value {
-  margin-left: auto;
-  flex-shrink: 0;
-}
-
-.simplify-control input[type="range"] {
-  flex: 1;
-  width: 100%;
-  accent-color: #4fc3f7;
-}
-
-#simplifyBtn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
-  border-radius: 6px;
-  border: 2px solid rgba(255, 255, 255, 0.2);
-  background: rgba(255, 255, 255, 0.05);
-  color: #fff;
-  cursor: pointer;
-  font-size: 11px;
-}
-
-#simplifyBtn:active {
-  background: rgba(79, 195, 247, 0.2);
-  border-color: #4fc3f7;
-}
-
-#simplifyBtn svg {
-  width: 18px;
-  height: 18px;
-  stroke: #fff;
-  fill: none;
-  stroke-width: 2;
-}
-
-.selection-prop-label {
-  font-size: 10px;
-  color: rgba(255, 255, 255, 0.4);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.selection-prop-value {
-  font-size: 12px;
-  color: #4fc3f7;
-  font-family: monospace;
-}
-
-/* Colors Section */
-
-/* Node Section */
-.panel-section-node {
-  height: auto;
-  flex: 0 0 auto;
-  padding: 8px 12px;
-  gap: 8px;
-  display: none;
-  flex-direction: column;
-}
-
-.node-section-info {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 12px;
-}
-
-.node-type-selector {
-  display: flex;
-  gap: 4px;
-  padding: 4px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  margin-bottom: 6px;
-}
-
-.node-type-btn {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  padding: 4px 6px;
-  border-radius: 4px;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  background: rgba(255, 255, 255, 0.03);
-  color: rgba(255, 255, 255, 0.5);
-  cursor: pointer;
-  font-size: 9px;
-  flex: 1;
-  transition: all 0.15s ease;
-}
-
-.node-type-btn:active {
-  transform: scale(0.95);
-}
-
-.node-type-btn.active {
-  background: rgba(105, 240, 174, 0.15);
-  border-color: #69f0ae;
-  color: #69f0ae;
-}
-
-.node-type-btn svg {
+.topbar-btn svg {
   width: 18px;
   height: 18px;
   stroke: currentColor;
@@ -246,278 +56,63 @@
   stroke-width: 2;
 }
 
-.node-prop-label {
-  font-size: 10px;
-  color: rgba(255, 255, 255, 0.4);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.node-prop-value {
-  font-size: 12px;
-  color: #69f0ae;
-  font-family: monospace;
-}
-
-.node-actions {
-  display: flex;
-  gap: 8px;
-}
-
-.node-btn {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 5px 8px;
-  border-radius: 6px;
-  border: 2px solid rgba(255, 255, 255, 0.2);
-  background: rgba(255, 255, 255, 0.05);
-  color: #fff;
-  cursor: pointer;
-  font-size: 11px;
-}
-
-.node-btn:active {
-  background: rgba(105, 240, 174, 0.2);
-  border-color: #69f0ae;
-}
-
-.node-btn svg {
-  width: 16px;
-  height: 16px;
-  stroke: #fff;
-  fill: none;
-  stroke-width: 2;
-}
-
-/* Colors Section */
-.panel-section-colors {
-  max-height: 80px;
-  flex: 0 0 80px;
-  overflow-y: auto;
-}
-
-/* Sizes Section */
-.panel-section-sizes {
-  max-height: 60px;
-  flex: 0 0 60px;
-  overflow-y: auto;
-}
-
-/* Panel content containers */
-#panelTools,
-#panelColors,
-#panelSizes {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 8px;
-}
-
-/* Tool buttons */
-.panel-tool-btn {
-  width: 40px;
-  height: 40px;
-  border-radius: 8px;
-  border: 2px solid rgba(255, 255, 255, 0.2);
-  background: rgba(255, 255, 255, 0.05);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-}
-
-.panel-tool-btn.active {
-  border-color: #4fc3f7;
-  background: rgba(79, 195, 247, 0.2);
-}
-
-.panel-tool-btn svg {
-  width: 20px;
-  height: 20px;
-  stroke: #fff;
-  fill: none;
-  stroke-width: 2;
-}
-
-/* Color buttons */
-.panel-color-btn {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  cursor: pointer;
-}
-
-.panel-color-btn.active {
-  border-color: #fff;
-  box-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
-}
-
-/* Size buttons */
-.panel-size-btn {
-  width: 24px;
+.topbar-sep {
+  width: 1px;
   height: 24px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.15);
+  margin: 0 4px;
+}
+
+/* Window list dropdown */
+.topbar-win-list {
+  position: absolute;
+  top: 44px;
+  left: 8px;
+  background: rgba(30, 30, 50, 0.97);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  padding: 4px;
+  display: none;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 150px;
+  z-index: 300;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+.topbar-win-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 8px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.5);
   cursor: pointer;
+  font-size: 0.75em;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  transition: background 0.1s;
 }
 
-.panel-size-btn.active {
-  background: rgba(79, 195, 247, 0.4);
-  border-color: #4fc3f7;
+.topbar-win-item:hover {
+  background: rgba(255, 255, 255, 0.08);
 }
 
-/* Separators */
-.panel-sep {
-  width: 100%;
-  height: 1px;
-  background: rgba(255, 255, 255, 0.2);
+.topbar-win-item.visible {
+  color: #69f0ae;
 }
 
-/* ============================
-   Media Queries
-   ============================ */
-
-/* --- Landscape --- */
-@media (orientation: landscape) {
-  #corePanel {
-    width: 240px;
-    height: 100%;
-    top: 0;
-    left: 0;
-    flex-direction: column;
-    padding: 12px;
-    gap: 12px;
-  }
-
-  .panel-section {
-    flex-direction: column;
-  }
-
-  .panel-header {
-    flex-direction: column;
-  }
-
-  .panel-app-info {
-    flex-direction: column;
-  }
-
-  .panel-section-header {
-    height: 44px;
-    flex: 0 0 44px;
-  }
-
-  .panel-section-tool {
-    height: auto;
-    flex: 0 0 auto;
-  }
-
-  .panel-section-selection {
-    flex-direction: column;
-  }
-
-  .panel-section-colors {
-    flex-direction: row;
-    max-height: 80px;
-    flex: 0 0 80px;
-    overflow-y: auto;
-  }
-
-  .panel-section-sizes {
-    max-height: 60px;
-    flex: 0 0 60px;
-    overflow-y: auto;
-  }
-
-  .panel-sep {
-    width: 100%;
-    height: 1px;
-  }
-
-  #panelTools,
-  #panelColors,
-  #panelSizes {
-    gap: 8px;
-  }
+.topbar-app-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  font-size: 0.7em;
+  color: rgba(255, 255, 255, 0.3);
 }
 
-/* --- Portrait --- */
-@media (orientation: portrait) {
-  #corePanel {
-    width: 100%;
-    height: 240px;
-    top: 0;
-    left: 0;
-    flex-direction: row;
-    padding: 8px 12px;
-    gap: 8px;
-  }
-
-  .panel-section {
-    flex-direction: row;
-    flex-wrap: wrap;
-  }
-
-  .panel-section-header {
-    width: auto;
-    height: auto;
-    flex: 1;
-    flex-direction: row;
-    justify-content: space-between;
-    padding: 0 8px;
-  }
-
-  .panel-header {
-    flex-direction: row;
-    justify-content: space-between;
-    align-items: center;
-  }
-
-  .panel-app-info {
-    flex-direction: row;
-    gap: 8px;
-  }
-
-  .panel-section-tool {
-    width: 100%;
-    height: auto;
-    flex: 0 0 auto;
-  }
-
-  .panel-section-selection {
-    flex-direction: column;
-  }
-
-  .panel-section-colors {
-    width: 100%;
-    height: auto;
-    flex: 1;
-    max-width: none;
-    max-height: none;
-    overflow-x: auto;
-    overflow-y: hidden;
-  }
-
-  .panel-section-sizes {
-    width: 100%;
-    height: auto;
-    flex: 1;
-    max-width: none;
-    max-height: none;
-    overflow-x: auto;
-    overflow-y: hidden;
-  }
-
-  .panel-sep {
-    width: 1px;
-    height: 100%;
-  }
-
-  #panelColors,
-  #panelSizes {
-    flex-direction: row;
-    gap: 4px;
-  }
+.topbar-app-info .app-name {
+  font-weight: bold;
+  color: rgba(255, 255, 255, 0.5);
 }

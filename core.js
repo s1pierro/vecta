@@ -833,222 +833,60 @@ class CorePanel {
     panel.id = 'corePanel';
     this.#el = panel;
 
-    // Section Header
-    const sectionHeader = document.createElement('div');
-    sectionHeader.className = 'panel-section panel-section-header';
+    // ── Top bar: only global actions + window list ──
+    const bar = document.createElement('div');
+    bar.className = 'topbar';
 
-    const fullscreenBtn = document.createElement('button');
-    fullscreenBtn.id = 'fullscreenBtn';
-    fullscreenBtn.className = 'panel-btn';
-    fullscreenBtn.title = 'Plein ecran';
-    fullscreenBtn.innerHTML = '<svg class="expand-icon" viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/></svg>' +
-      '<svg class="compress-icon" viewBox="0 0 24 24" style="display:none"><path d="M8 3v3a2 2 0 01-2 2H3m18 0h-3a2 2 0 01-2-2V3m0 18v-3a2 2 0 012-2h3M3 16h3a2 2 0 012 2v3"/></svg>';
+    const fullscreenBtn = this.#makeBtn('fullscreenBtn', 'Plein ecran',
+      '<svg class="expand-icon" viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/></svg>' +
+      '<svg class="compress-icon" viewBox="0 0 24 24" style="display:none"><path d="M8 3v3a2 2 0 01-2 2H3m18 0h-3a2 2 0 01-2-2V3m0 18v-3a2 2 0 012-2h3M3 16h3a2 2 0 012 2v3"/></svg>');
     fullscreenBtn.addEventListener('click', () => {
-      if (!document.fullscreenElement) {
-        document.documentElement.requestFullscreen();
-      } else {
-        document.exitFullscreen();
-      }
+      if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+      else document.exitFullscreen();
     });
 
-    const clearBtn = document.createElement('button');
-    clearBtn.id = 'clearBtn';
-    clearBtn.className = 'panel-btn';
-    clearBtn.title = 'Effacer';
-    clearBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>';
-    clearBtn.addEventListener('click', () => {
-      this.#stateMachine.clearCanvas();
-    });
+    const clearBtn = this.#makeBtn('clearBtn', 'Effacer',
+      '<svg viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>');
+    clearBtn.addEventListener('click', () => this.#stateMachine.clearCanvas());
 
-    const undoBtn = document.createElement('button');
-    undoBtn.id = 'undoBtn';
-    undoBtn.className = 'panel-btn';
-    undoBtn.title = 'Annuler';
-    undoBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M3 10h10a5 5 0 015 5v2M3 10l5-5M3 10l5 5"/></svg>';
-    undoBtn.addEventListener('click', () => {
-      this.#stateMachine.undo();
-    });
+    const undoBtn = this.#makeBtn('undoBtn', 'Annuler',
+      '<svg viewBox="0 0 24 24"><path d="M3 10h10a5 5 0 015 5v2M3 10l5-5M3 10l5 5"/></svg>');
+    undoBtn.addEventListener('click', () => this.#stateMachine.undo());
 
-    const redoBtn = document.createElement('button');
-    redoBtn.id = 'redoBtn';
-    redoBtn.className = 'panel-btn';
-    redoBtn.title = 'Refaire';
-    redoBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M21 10H11a5 5 0 00-5 5v2M21 10l-5-5M21 10l-5 5"/></svg>';
-    redoBtn.addEventListener('click', () => {
-      this.#stateMachine.redo();
-    });
+    const redoBtn = this.#makeBtn('redoBtn', 'Refaire',
+      '<svg viewBox="0 0 24 24"><path d="M21 10H11a5 5 0 00-5 5v2M21 10l-5-5M21 10l-5 5"/></svg>');
+    redoBtn.addEventListener('click', () => this.#stateMachine.redo());
 
+    const sep = document.createElement('div');
+    sep.className = 'topbar-sep';
+
+    // Window list button
+    const winBtn = this.#makeBtn('winListBtn', 'Fenêtres',
+      '<svg viewBox="0 0 24 24"><path d="M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z"/></svg>');
+    winBtn.addEventListener('click', () => this.#toggleWinList());
+
+    // Window list dropdown
+    const winList = document.createElement('div');
+    winList.id = 'topbarWinList';
+    winList.className = 'topbar-win-list';
+    winList.style.display = 'none';
+
+    bar.appendChild(fullscreenBtn);
+    bar.appendChild(clearBtn);
+    bar.appendChild(undoBtn);
+    bar.appendChild(redoBtn);
+    bar.appendChild(sep);
+    bar.appendChild(winBtn);
+    bar.appendChild(winList);
+    panel.appendChild(bar);
+
+    // App info
     const appInfo = document.createElement('div');
-    appInfo.className = 'panel-app-info';
+    appInfo.className = 'topbar-app-info';
     appInfo.innerHTML = `<span class="app-name">${APP_NAME}</span><span class="app-version">${APP_VERSION}</span>`;
+    panel.appendChild(appInfo);
 
-    sectionHeader.appendChild(fullscreenBtn);
-    sectionHeader.appendChild(clearBtn);
-    sectionHeader.appendChild(undoBtn);
-    sectionHeader.appendChild(redoBtn);
-    sectionHeader.appendChild(appInfo);
-    panel.appendChild(sectionHeader);
-
-    // Separator 1
-    const sep1 = document.createElement('div');
-    sep1.className = 'panel-sep';
-    panel.appendChild(sep1);
-
-    // Section Selection Properties
-    const sectionSelection = document.createElement('div');
-    sectionSelection.className = 'panel-section panel-section-selection';
-    sectionSelection.id = 'panelSelection';
-
-    const selInfo = document.createElement('div');
-    selInfo.className = 'selection-info';
-    selInfo.innerHTML =
-      '<div><span class="selection-prop-label">Couleur</span><span class="selection-prop-value" id="selColor"></span></div>' +
-      '<div><span class="selection-prop-label">Taille</span><span class="selection-prop-value" id="selSize"></span></div>' +
-      '<div><span class="selection-prop-label">Points</span><span class="selection-prop-value" id="selPoints"></span></div>';
-    sectionSelection.appendChild(selInfo);
-
-    const selActions = document.createElement('div');
-    selActions.className = 'selection-actions';
-    selActions.innerHTML =
-      '<div class="simplify-control">' +
-        '<span class="selection-prop-label">Tolérance</span>' +
-        '<span class="selection-prop-value" id="selTolerance">5px</span>' +
-        '<input type="range" id="selToleranceSlider" min="1" max="50" step="1" value="5">' +
-      '</div>' +
-      '<button class="panel-btn" id="simplifyBtn" title="Simplifier">' +
-        '<svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16" stroke-dasharray="1 3"/></svg>' +
-        '<span class="btn-label">Simplifier</span>' +
-      '</button>';
-    sectionSelection.appendChild(selActions);
-    panel.appendChild(sectionSelection);
-
-    sectionSelection.querySelector('#selToleranceSlider').addEventListener('input', (e) => {
-      const val = e.target.value;
-      sectionSelection.querySelector('#selTolerance').textContent = val + 'px';
-    });
-
-    sectionSelection.querySelector('#simplifyBtn').addEventListener('click', () => {
-      const tol = parseInt(sectionSelection.querySelector('#selToleranceSlider').value, 10);
-      this.#stateMachine.simplifySelectedPath(tol);
-    });
-
-    // Section Node Properties
-    const sectionNode = document.createElement('div');
-    sectionNode.className = 'panel-section panel-section-node';
-    sectionNode.id = 'panelNode';
-    sectionNode.style.display = 'none';
-    sectionNode.innerHTML =
-      '<div class="node-section-info">' +
-        '<span class="node-prop-label">Nœuds sélectionnés</span>' +
-        '<span class="node-prop-value" id="nodeCount">0</span>' +
-        '<span class="node-prop-label">Indices</span>' +
-        '<span class="node-prop-value" id="nodeIndices">-</span>' +
-      '</div>' +
-      '<div class="node-type-selector" id="nodeTypeSelector">' +
-        '<button class="node-type-btn active" data-node-type="corner" title="Coin">' +
-          '<svg viewBox="0 0 24 24"><path d="M4 4l6 16 4-8 8-4z"/></svg>' +
-          '<span class="btn-label">Coin</span>' +
-        '</button>' +
-        '<button class="node-type-btn" data-node-type="smooth" title="Lisse">' +
-          '<svg viewBox="0 0 24 24"><path d="M3 17c1-2 3-4 5-4s3 3 5 3 4-4 8-4v4c-2 0-4 3-7 3s-3-3-5-3-4 3-6 4V17z"/></svg>' +
-          '<span class="btn-label">Lisse</span>' +
-        '</button>' +
-        '<button class="node-type-btn" data-node-type="symmetric" title="Symétrique">' +
-          '<svg viewBox="0 0 24 24"><path d="M3 17c2-3 4-5 6-5s4 4 5 4 3-4 5-4v0c-2 0-4 4-5 4s-3-4-5-4-4 3-6 5z"/></svg>' +
-          '<span class="btn-label">Symétrique</span>' +
-        '</button>' +
-        '<button class="node-type-btn" data-node-type="auto" title="Auto">' +
-          '<svg viewBox="0 0 24 24"><path d="M12 2l3 7h7l-5.5 4 2 7L12 16l-6.5 4 2-7L2 9h7z"/></svg>' +
-          '<span class="btn-label">Auto</span>' +
-        '</button>' +
-      '</div>' +
-      '<div class="node-actions">' +
-        '<button class="panel-btn node-btn" id="nodeDeleteBtn" title="Supprimer">' +
-          '<svg viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>' +
-          '<span class="btn-label">Supprimer</span>' +
-        '</button>' +
-        '<button class="panel-btn node-btn" id="nodeInsertBtn" title="Insérer">' +
-          '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>' +
-          '<span class="btn-label">Insérer</span>' +
-        '</button>' +
-      '</div>';
-    panel.appendChild(sectionNode);
-
-    // Node type selector
-    sectionNode.querySelectorAll('.node-type-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const type = btn.dataset.nodeType;
-        this.#stateMachine.setNodeTypeForSelected(type);
-      });
-    });
-
-    sectionNode.querySelector('#nodeDeleteBtn').addEventListener('click', () => {
-      this.#stateMachine.deleteSelectedNodes();
-    });
-    sectionNode.querySelector('#nodeInsertBtn').addEventListener('click', () => {
-      this.#stateMachine.insertNodesBetweenSelected();
-    });
-
-    // Section Tools — replaced by SubWindow toolSelector
-    const sectionTool = document.createElement('div');
-    sectionTool.className = 'panel-section panel-section-tool';
-    sectionTool.innerHTML = '<div class="panel-section-info" style="color:rgba(255,255,255,0.3);font-size:0.7em;">Outils → fenêtre</div>';
-    sectionTool.addEventListener('click', () => this.#subWindowManager.toggleWindow('toolSelector'));
-    sectionTool.style.cursor = 'pointer';
-    panel.appendChild(sectionTool);
-
-    // Separator 2
-    const sep2 = document.createElement('div');
-    sep2.className = 'panel-sep';
-    panel.appendChild(sep2);
-
-    // Section Colors — replaced by SubWindow colorPicker
-    // (buttons now rendered in SubWindow, kept for potential fallback)
-    const sectionColors = document.createElement('div');
-    sectionColors.className = 'panel-section panel-section-colors';
-    sectionColors.innerHTML = '<div class="panel-section-info" style="color:rgba(255,255,255,0.3);font-size:0.7em;">Couleur → fenêtre</div>';
-    sectionColors.addEventListener('click', () => this.#subWindowManager.toggleWindow('colorPicker'));
-    sectionColors.style.cursor = 'pointer';
-    panel.appendChild(sectionColors);
-
-    // Separator 3
-    const sep3 = document.createElement('div');
-    sep3.className = 'panel-sep';
-    panel.appendChild(sep3);
-
-    // Section Sizes — replaced by SubWindow sizeSelector
-    const sectionSizes = document.createElement('div');
-    sectionSizes.className = 'panel-section panel-section-sizes';
-    sectionSizes.innerHTML = '<div class="panel-section-info" style="color:rgba(255,255,255,0.3);font-size:0.7em;">Taille → fenêtre</div>';
-    sectionSizes.addEventListener('click', () => this.#subWindowManager.toggleWindow('sizeSelector'));
-    sectionSizes.style.cursor = 'pointer';
-    panel.appendChild(sectionSizes);
-
-    // Separator 4
-    const sep4 = document.createElement('div');
-    sep4.className = 'panel-sep';
-    panel.appendChild(sep4);
-
-    // Section Sub-Windows List
-    const sectionSubWindows = document.createElement('div');
-    sectionSubWindows.className = 'panel-section panel-section-subwindows';
-    sectionSubWindows.id = 'panelSubWindows';
-    sectionSubWindows.innerHTML =
-      '<div class="subwindows-header">' +
-        '<span class="subwindows-title">Fenêtres</span>' +
-      '</div>' +
-      '<div class="subwindows-list" id="subWindowsList"></div>';
-    panel.appendChild(sectionSubWindows);
-
-    // Wire sub-window list updates
-    if (this.#subWindowManager) {
-      this.#subWindowManager.on('windowAdded', () => this.#updateSubWindowsList());
-      this.#subWindowManager.on('windowRemoved', () => this.#updateSubWindowsList());
-      this.#subWindowManager.on('visibilityChange', () => this.#updateSubWindowsList());
-    }
-
-    container.appendChild(panel);
-
+    // Fullscreen change handler
     document.addEventListener('fullscreenchange', () => {
       const expandIcon = fullscreenBtn.querySelector('.expand-icon');
       const compressIcon = fullscreenBtn.querySelector('.compress-icon');
@@ -1062,27 +900,48 @@ class CorePanel {
     });
   }
 
+  #makeBtn(id, title, svgContent) {
+    const btn = document.createElement('button');
+    btn.id = id;
+    btn.className = 'topbar-btn';
+    btn.title = title;
+    btn.innerHTML = svgContent;
+    return btn;
+  }
+
+  #toggleWinList() {
+    const list = document.getElementById('topbarWinList');
+    if (!list) return;
+    const isVisible = list.style.display === 'block';
+    if (isVisible) {
+      list.style.display = 'none';
+    } else {
+      list.innerHTML = '';
+      this.#subWindowManager.getWindows().forEach(w => {
+        const row = document.createElement('button');
+        row.className = 'topbar-win-item' + (w.visible ? ' visible' : '');
+        row.innerHTML = `<span>${w.title}</span><span>${w.visible ? '●' : '○'}</span>`;
+        row.addEventListener('click', () => {
+          this.#subWindowManager.toggleWindow(w.id);
+          list.style.display = 'none';
+        });
+        list.appendChild(row);
+      });
+      list.style.display = 'block';
+    }
+  }
+
+  // ── Private helpers ──
   #selectTool(tool) {
     document.querySelectorAll('.panel-tool-btn').forEach(b => b.classList.remove('active'));
     const btn = document.querySelector(`.panel-tool-btn[data-tool="${tool}"]`);
     if (btn) btn.classList.add('active');
     this.#stateMachine.currentTool = tool;
-
-    const modeMap = {
-      draw: 'drawingTool',
-      select: 'selection',
-      pan: 'drawingTool'
-    };
+    const modeMap = { draw: 'drawingTool', select: 'selection', pan: 'drawingTool' };
     this.#stateMachine.setMode(modeMap[tool] || 'drawingTool');
-
-    // Show/hide select mode button in toolSelector SubWindow
     const selectModeBtn = document.querySelector('#selectModeBtn');
-    if (selectModeBtn) {
-      selectModeBtn.style.display = tool === 'select' ? '' : 'none';
-    }
+    if (selectModeBtn) selectModeBtn.style.display = tool === 'select' ? '' : 'none';
   }
-
-  selectTool(tool) { this.#selectTool(tool); }
 
   #toggleSelectMode() {
     const current = this.#selectionManager.selectMode;
@@ -1095,125 +954,31 @@ class CorePanel {
     }
   }
 
-  toggleSelectMode() { this.#toggleSelectMode(); }
-
   #selectColor(color) {
     document.querySelectorAll('.panel-color-btn').forEach(b => b.classList.remove('active'));
     const btn = document.querySelector(`.panel-color-btn[data-color="${color}"]`);
     if (btn) btn.classList.add('active');
-    if (this.#selectionManager.selectedPath) {
-      this.#stateMachine.updateSelectedPath({ color });
-    }
+    if (this.#selectionManager.selectedPath) this.#stateMachine.updateSelectedPath({ color });
     this.#stateMachine.currentColor = color;
   }
-
-  selectColor(color) { this.#selectColor(color); }
 
   #selectSize(size) {
     document.querySelectorAll('.panel-size-btn').forEach(b => b.classList.remove('active'));
     const btn = document.querySelector(`.panel-size-btn[data-size="${size}"]`);
     if (btn) btn.classList.add('active');
-    if (this.#selectionManager.selectedPath) {
-      this.#stateMachine.updateSelectedPath({ size });
-    }
+    if (this.#selectionManager.selectedPath) this.#stateMachine.updateSelectedPath({ size });
     this.#stateMachine.currentSize = size;
   }
 
+  // ── Public delegates for SubWindow controls ──
+  selectTool(tool) { this.#selectTool(tool); }
+  toggleSelectMode() { this.#toggleSelectMode(); }
+  selectColor(color) { this.#selectColor(color); }
   selectSize(size) { this.#selectSize(size); }
-
-  syncSelection(path) {
-    const section = this.#el.querySelector('#panelSelection');
-    if (!path) {
-      section.classList.remove('visible');
-    } else {
-      section.classList.add('visible');
-    }
-    this.syncNodeSelection();
-
-    // Update toolSelector properties section
-    const propsSection = document.getElementById('toolPropsSection');
-    if (propsSection) propsSection.style.display = path ? '' : 'none';
-    if (path) {
-      const tpColor = document.getElementById('tpColor');
-      const tpSize = document.getElementById('tpSize');
-      const tpPoints = document.getElementById('tpPoints');
-      if (tpColor) tpColor.textContent = path.color;
-      if (tpSize) tpSize.textContent = path.size + 'px';
-      if (tpPoints) tpPoints.textContent = path.points ? path.points.length : 0;
-    }
-
-    if (!path) return;
-
-    const selColor = document.getElementById('selColor');
-    const selSize = document.getElementById('selSize');
-    const selPoints = document.getElementById('selPoints');
-    if (selColor) selColor.textContent = path.color;
-    if (selSize) selSize.textContent = path.size + 'px';
-    if (selPoints) selPoints.textContent = path.points ? path.points.length : 0;
-
-    document.querySelectorAll('.panel-color-btn').forEach(b => b.classList.remove('active'));
-    const colorBtn = document.querySelector(`.panel-color-btn[data-color="${path.color}"]`);
-    if (colorBtn) colorBtn.classList.add('active');
-    document.querySelectorAll('.panel-size-btn').forEach(b => b.classList.remove('active'));
-    const sizeBtn = document.querySelector(`.panel-size-btn[data-size="${path.size}"]`);
-    if (sizeBtn) sizeBtn.classList.add('active');
-  }
-
-  syncNodeSelection() {
-    const nodes = this.#selectionManager.selectedNodes;
-
-    // Update legacy panelNode
-    const section = document.getElementById('panelNode');
-    if (section) {
-      if (!nodes || nodes.length === 0) {
-        section.style.display = 'none';
-      } else {
-        section.style.display = 'flex';
-        const count = document.getElementById('nodeCount');
-        const indices = document.getElementById('nodeIndices');
-        if (count) count.textContent = nodes.length;
-        if (indices) indices.textContent = nodes.sort((a, b) => a - b).join(', ');
-      }
-    }
-
-    // Update toolSelector node section
-    const nodeSection = document.getElementById('toolNodeSection');
-    if (nodeSection) {
-      nodeSection.style.display = nodes && nodes.length > 0 ? '' : 'none';
-      if (nodes && nodes.length > 0) {
-        const tnCount = document.getElementById('tnCount');
-        const tnIndices = document.getElementById('tnIndices');
-        if (tnCount) tnCount.textContent = nodes.length;
-        if (tnIndices) tnIndices.textContent = nodes.sort((a, b) => a - b).join(', ');
-      }
-    }
-
-    // Sync node type selector
-    this.#syncNodeTypeSelector();
-  }
-
   selectNodeType(type) { this.#stateMachine.setNodeTypeForSelected(type); }
   deleteNodes() { this.#stateMachine.deleteSelectedNodes(); }
   insertNodes() { this.#stateMachine.insertNodesBetweenSelected(); }
   simplifySelectedPath(tol) { this.#stateMachine.simplifySelectedPath(tol); }
-
-  #updateSubWindowsList() {
-    const list = document.getElementById('subWindowsList');
-    if (!list || !this.#subWindowManager) return;
-    list.innerHTML = '';
-    const windows = this.#subWindowManager.getWindows();
-    windows.forEach(w => {
-      const row = document.createElement('button');
-      row.className = 'subwindow-item' + (w.visible ? ' visible' : '');
-      row.innerHTML =
-        `<span class="subwindow-item-title">${w.title}</span>` +
-        `<span class="subwindow-item-status">${w.visible ? '●' : '○'}</span>`;
-      row.addEventListener('click', () => {
-        this.#subWindowManager.toggleWindow(w.id);
-      });
-      list.appendChild(row);
-    });
-  }
 
   #syncNodeTypeSelector() {
     const path = this.#selectionManager.selectedPath;
