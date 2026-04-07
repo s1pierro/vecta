@@ -105,9 +105,9 @@ class Application {
       this.#corePanel.syncSelection(path);
       this.#updateStatusBar();
     });
-    this.#statesMachine.on('selectablesChange', () => {
+    this.#statesMachine.on('selectedNodesChange', () => {
+      this.#corePanel.syncNodeSelection();
       this.#drawArea._redraw();
-      this.#updateStatusBar();
     });
     this.#statesMachine.on('pathsChange', () => {
       const path = this.#statesMachine.selectedPath;

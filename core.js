@@ -57,7 +57,8 @@ class StateMachine {
       paths: [],
       currentPath: null,
       selectedPath: null,
-      selectables: 'objects'
+      selectables: 'objects',
+      selectedNodes: []
     };
     this.#listeners = {};
     this.#saveState();
@@ -90,9 +91,19 @@ class StateMachine {
   get selectedPath() { return this.#state.selectedPath; }
   set selectedPath(v) {
     this.#state.selectedPath = v;
+    this.#state.selectedNodes = v ? [] : [];
     this.#state.selectables = v ? 'nodes' : 'objects';
+    this.#emit('selectedNodesChange', this.#state.selectedNodes);
     this.#emit('selectablesChange', this.#state.selectables);
     this.#emit('selectedPathChange', v);
+  }
+
+  get selectedNodes() { return this.#state.selectedNodes; }
+  set selectedNodes(v) {
+    this.#state.selectedNodes = v || [];
+    this.#state.selectables = this.#state.selectedNodes.length > 0 ? 'nodeSelection' : 'nodes';
+    this.#emit('selectedNodesChange', this.#state.selectedNodes);
+    this.#emit('selectablesChange', this.#state.selectables);
   }
 
   get selectables() { return this.#state.selectables; }
@@ -189,6 +200,43 @@ class StateMachine {
     this.#saveState();
   }
 
+  deleteSelectedNodes() {
+    if (!this.#state.selectedPath || this.#state.selectedNodes.length === 0) return;
+    const path = this.#state.selectedPath;
+    if (path.points.length - this.#state.selectedNodes.length < 2) return; // keep minimum 2 points
+    const toRemove = new Set(this.#state.selectedNodes);
+    path.points = path.points.filter((_, i) => !toRemove.has(i));
+    this.#state.selectedNodes = [];
+    this.#state.selectables = 'nodes';
+    this.#emit('pathsChange', this.#state.paths);
+    this.#emit('selectedNodesChange', this.#state.selectedNodes);
+    this.#emit('selectablesChange', this.#state.selectables);
+    this.#saveState();
+  }
+
+  insertNodesBetweenSelected() {
+    if (!this.#state.selectedPath || this.#state.selectedNodes.length < 2) return;
+    const path = this.#state.selectedPath;
+    const indices = [...this.#state.selectedNodes].sort((a, b) => a - b);
+    const newIndices = [];
+    let offset = 0;
+    for (let i = 0; i < indices.length - 1; i++) {
+      const aIdx = indices[i] + offset;
+      const bIdx = indices[i + 1] + offset;
+      if (aIdx + 1 < bIdx) continue; // already have nodes between
+      const a = path.points[aIdx];
+      const b = path.points[aIdx + 1];
+      const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+      path.points.splice(aIdx + 1, 0, mid);
+      newIndices.push(aIdx + 1);
+      offset++;
+    }
+    this.#state.selectedNodes = [...indices.map(i => i), ...newIndices].sort((a, b) => a - b);
+    this.#emit('pathsChange', this.#state.paths);
+    this.#emit('selectedNodesChange', this.#state.selectedNodes);
+    this.#saveState();
+  }
+
   clearCanvas() {
     this.#state.paths = [];
     this.#emit('clearCanvas');
@@ -197,6 +245,7 @@ class StateMachine {
 
   setMode(newMode) {
     this.#state.currentPath = null;
+    this.#state.selectedNodes = [];
     if (newMode !== 'selection') {
       this.#state.selectedPath = null;
       this.#state.selectables = 'objects';
@@ -319,6 +368,37 @@ class CorePanel {
       this.#stateMachine.simplifySelectedPath(tol);
     });
 
+    // Section Node Properties
+    const sectionNode = document.createElement('div');
+    sectionNode.className = 'panel-section panel-section-node';
+    sectionNode.id = 'panelNode';
+    sectionNode.style.display = 'none';
+    sectionNode.innerHTML =
+      '<div class="node-section-info">' +
+        '<span class="node-prop-label">Nœuds sélectionnés</span>' +
+        '<span class="node-prop-value" id="nodeCount">0</span>' +
+        '<span class="node-prop-label">Indices</span>' +
+        '<span class="node-prop-value" id="nodeIndices">-</span>' +
+      '</div>' +
+      '<div class="node-actions">' +
+        '<button class="panel-btn node-btn" id="nodeDeleteBtn" title="Supprimer">' +
+          '<svg viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>' +
+          '<span class="btn-label">Supprimer</span>' +
+        '</button>' +
+        '<button class="panel-btn node-btn" id="nodeInsertBtn" title="Insérer">' +
+          '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>' +
+          '<span class="btn-label">Insérer</span>' +
+        '</button>' +
+      '</div>';
+    panel.appendChild(sectionNode);
+
+    sectionNode.querySelector('#nodeDeleteBtn').addEventListener('click', () => {
+      this.#stateMachine.deleteSelectedNodes();
+    });
+    sectionNode.querySelector('#nodeInsertBtn').addEventListener('click', () => {
+      this.#stateMachine.insertNodesBetweenSelected();
+    });
+
     // Section Tools
     const sectionTool = document.createElement('div');
     sectionTool.className = 'panel-section panel-section-tool';
@@ -439,9 +519,11 @@ class CorePanel {
     const section = this.#el.querySelector('#panelSelection');
     if (!path) {
       section.classList.remove('visible');
-      return;
+    } else {
+      section.classList.add('visible');
     }
-    section.classList.add('visible');
+    this.syncNodeSelection();
+    if (!path) return;
     const selColor = this.#el.querySelector('#selColor');
     const selSize = this.#el.querySelector('#selSize');
     const selPoints = this.#el.querySelector('#selPoints');
@@ -455,6 +537,20 @@ class CorePanel {
     this.#el.querySelectorAll('.panel-size-btn').forEach(b => b.classList.remove('active'));
     const sizeBtn = this.#el.querySelector(`[data-size="${path.size}"]`);
     if (sizeBtn) sizeBtn.classList.add('active');
+  }
+
+  syncNodeSelection() {
+    const section = this.#el.querySelector('#panelNode');
+    const nodes = this.#stateMachine.selectedNodes;
+    if (!nodes || nodes.length === 0) {
+      section.style.display = 'none';
+      return;
+    }
+    section.style.display = '';
+    const count = this.#el.querySelector('#nodeCount');
+    const indices = this.#el.querySelector('#nodeIndices');
+    if (count) count.textContent = nodes.length;
+    if (indices) indices.textContent = nodes.sort((a, b) => a - b).join(', ');
   }
 }
 
@@ -633,8 +729,9 @@ class DrawArea {
       this.#svgCurrentPath.setAttribute('d', '');
     }
 
-    // Selection bounding box rectangle (draw tool)
+    // Selection bounding box rectangle
     this._drawSelBBox();
+    this._drawNodeSelBBox();
 
     this._redrawSelection();
   }
@@ -673,7 +770,7 @@ class DrawArea {
     this.#svgUI.innerHTML = '';
     const selectedPath = this.#stateMachine.selectedPath;
     if (!selectedPath || !selectedPath.points || selectedPath.points.length < 2 ||
-        this.#stateMachine.selectables !== 'nodes') {
+        (this.#stateMachine.selectables !== 'nodes' && this.#stateMachine.selectables !== 'nodeSelection')) {
       this._clearHandleDrag();
       return;
     }
@@ -683,48 +780,53 @@ class DrawArea {
     const tl = this.#docToScreen(bbox.minX - padding, bbox.minY - padding);
     const br = this.#docToScreen(bbox.maxX + padding, bbox.maxY + padding);
 
-    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-    rect.setAttribute('x', tl.x);
-    rect.setAttribute('y', tl.y);
-    rect.setAttribute('width', br.x - tl.x);
-    rect.setAttribute('height', br.y - tl.y);
-    rect.setAttribute('rx', '4');
-    rect.setAttribute('fill', 'none');
-    rect.setAttribute('stroke', '#4fc3f7');
-    rect.setAttribute('stroke-width', '2');
-    rect.setAttribute('stroke-dasharray', '6 3');
-    rect.setAttribute('pointer-events', 'none');
-    this.#svgUI.appendChild(rect);
+    // BBox rectangle (only in 'nodes' mode, not 'nodeSelection')
+    if (this.#stateMachine.selectables === 'nodes') {
+      const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      rect.setAttribute('x', tl.x);
+      rect.setAttribute('y', tl.y);
+      rect.setAttribute('width', br.x - tl.x);
+      rect.setAttribute('height', br.y - tl.y);
+      rect.setAttribute('rx', '4');
+      rect.setAttribute('fill', 'none');
+      rect.setAttribute('stroke', '#4fc3f7');
+      rect.setAttribute('stroke-width', '2');
+      rect.setAttribute('stroke-dasharray', '6 3');
+      rect.setAttribute('pointer-events', 'none');
+      this.#svgUI.appendChild(rect);
 
-    const handleSize = 10;
-    const handles = [
-      { name: 'n',  cx: (tl.x + br.x) / 2, cy: tl.y, cursor: 'ns-resize' },
-      { name: 's',  cx: (tl.x + br.x) / 2, cy: br.y, cursor: 'ns-resize' },
-      { name: 'w',  cx: tl.x, cy: (tl.y + br.y) / 2, cursor: 'ew-resize' },
-      { name: 'e',  cx: br.x, cy: (tl.y + br.y) / 2, cursor: 'ew-resize' },
-      { name: 'nw', cx: tl.x, cy: tl.y, cursor: 'nwse-resize' },
-      { name: 'ne', cx: br.x, cy: tl.y, cursor: 'nesw-resize' },
-      { name: 'sw', cx: tl.x, cy: br.y, cursor: 'nesw-resize' },
-      { name: 'se', cx: br.x, cy: br.y, cursor: 'nwse-resize' },
-    ];
+      // BBox handles
+      const handleSize = 10;
+      const handles = [
+        { name: 'n',  cx: (tl.x + br.x) / 2, cy: tl.y, cursor: 'ns-resize' },
+        { name: 's',  cx: (tl.x + br.x) / 2, cy: br.y, cursor: 'ns-resize' },
+        { name: 'w',  cx: tl.x, cy: (tl.y + br.y) / 2, cursor: 'ew-resize' },
+        { name: 'e',  cx: br.x, cy: (tl.y + br.y) / 2, cursor: 'ew-resize' },
+        { name: 'nw', cx: tl.x, cy: tl.y, cursor: 'nwse-resize' },
+        { name: 'ne', cx: br.x, cy: tl.y, cursor: 'nesw-resize' },
+        { name: 'sw', cx: tl.x, cy: br.y, cursor: 'nesw-resize' },
+        { name: 'se', cx: br.x, cy: br.y, cursor: 'nwse-resize' },
+      ];
 
-    handles.forEach(h => {
-      const el = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-      el.setAttribute('x', h.cx - handleSize / 2);
-      el.setAttribute('y', h.cy - handleSize / 2);
-      el.setAttribute('width', handleSize);
-      el.setAttribute('height', handleSize);
-      el.setAttribute('rx', '2');
-      el.setAttribute('fill', '#fff');
-      el.setAttribute('stroke', '#4fc3f7');
-      el.setAttribute('stroke-width', '2');
-      el.setAttribute('pointer-events', 'none');
-      this.#svgUI.appendChild(el);
-    });
+      handles.forEach(h => {
+        const el = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        el.setAttribute('x', h.cx - handleSize / 2);
+        el.setAttribute('y', h.cy - handleSize / 2);
+        el.setAttribute('width', handleSize);
+        el.setAttribute('height', handleSize);
+        el.setAttribute('rx', '2');
+        el.setAttribute('fill', '#fff');
+        el.setAttribute('stroke', '#4fc3f7');
+        el.setAttribute('stroke-width', '2');
+        el.setAttribute('pointer-events', 'none');
+        this.#svgUI.appendChild(el);
+      });
+    }
 
-    // Poignées de nœuds — un petit cercle par point du tracé
+    // Node handles
     const nodeRadius = 5;
     const points = selectedPath.points;
+    const selectedNodes = this.#stateMachine.selectedNodes;
     const nodeHandles = [];
     points.forEach((p, i) => {
       const sp = this.#docToScreen(p.x, p.y);
@@ -732,18 +834,21 @@ class DrawArea {
       c.setAttribute('cx', sp.x);
       c.setAttribute('cy', sp.y);
       c.setAttribute('r', nodeRadius);
-      c.setAttribute('fill', '#4fc3f7');
-      c.setAttribute('stroke', '#fff');
+      c.setAttribute('fill', selectedNodes.includes(i) ? '#69f0ae' : '#4fc3f7');
+      c.setAttribute('stroke', selectedNodes.includes(i) ? '#fff' : '#fff');
       c.setAttribute('stroke-width', '2');
       c.setAttribute('pointer-events', 'none');
       this.#svgUI.appendChild(c);
       nodeHandles.push({ name: `node:${i}`, x: sp.x, y: sp.y });
     });
 
-    // Stocker tous les centres pour hit detection (bbox + nœuds)
-    const allHandles = handles.map(h => ({ name: h.name, x: h.cx, y: h.cy }));
-    this._handleCenters = allHandles.concat(nodeHandles);
-    this._handleHitRadius = Math.max(handleSize, nodeRadius * 2.5);
+    const allHandles = nodeHandles;
+    if (this.#stateMachine.selectables === 'nodes') {
+      const handles = this.#svgUI.querySelectorAll('[data-handle]');
+      // BBox handles already added above
+    }
+    this._handleCenters = nodeHandles;
+    this._handleHitRadius = nodeRadius * 2.5;
   }
 
   /**
@@ -945,10 +1050,16 @@ class DrawArea {
       if (this.#stateMachine.mode === 'drawingTool') {
         const pt = this.#screenToDoc(e.touchX, e.touchY);
         this.#stateMachine.currentPath = [{ x: pt.x, y: pt.y }];
-      } else if (this.#stateMachine.mode === 'selection' && this.#stateMachine.selectables === 'objects') {
-        const doc = this.#screenToDoc(e.touchX, e.touchY);
-        this._selBBoxStart = doc;
-        this._selBBoxCurrent = doc;
+      } else if (this.#stateMachine.mode === 'selection') {
+        if (this.#stateMachine.selectables === 'objects') {
+          const doc = this.#screenToDoc(e.touchX, e.touchY);
+          this._selBBoxStart = doc;
+          this._selBBoxCurrent = doc;
+        } else if (this.#stateMachine.selectables === 'nodes') {
+          const doc = this.#screenToDoc(e.touchX, e.touchY);
+          this._nodeSelBBoxStart = doc;
+          this._nodeSelBBoxCurrent = doc;
+        }
       }
     });
 
@@ -962,6 +1073,9 @@ class DrawArea {
         }
       } else if (this.#stateMachine.mode === 'selection' && this.#stateMachine.selectables === 'objects') {
         this._selBBoxCurrent = this.#screenToDoc(e.touchX, e.touchY);
+        this._redraw();
+      } else if (this.#stateMachine.mode === 'selection' && this.#stateMachine.selectables === 'nodes') {
+        this._nodeSelBBoxCurrent = this.#screenToDoc(e.touchX, e.touchY);
         this._redraw();
       }
     });
@@ -981,10 +1095,16 @@ class DrawArea {
         this._selectInBBox();
         this._selBBoxStart = null;
         this._selBBoxCurrent = null;
+      } else if (this.#stateMachine.mode === 'selection' && this.#stateMachine.selectables === 'nodes') {
+        this._selectNodesInBBox();
+        this._nodeSelBBoxStart = null;
+        this._nodeSelBBoxCurrent = null;
       }
     });
     this._selBBoxStart = null;
     this._selBBoxCurrent = null;
+    this._nodeSelBBoxStart = null;
+    this._nodeSelBBoxCurrent = null;
 
     overlay.engine.on('tap', (e) => {
       if (this.#stateMachine.mode === 'selection') {
@@ -1097,6 +1217,59 @@ class DrawArea {
       }
       if (found) break;
     }
+    this._selBBoxStart = null;
+    this._selBBoxCurrent = null;
     this.#stateMachine.selectedPath = found || null;
+  }
+
+  /**
+   * Sélectionne les nœuds dont la position écran est dans la boîte de sélection.
+   */
+  _selectNodesInBBox() {
+    if (!this._nodeSelBBoxStart || !this._nodeSelBBoxCurrent) return;
+    const sx1 = Math.min(this._nodeSelBBoxStart.x, this._nodeSelBBoxCurrent.x);
+    const sy1 = Math.min(this._nodeSelBBoxStart.y, this._nodeSelBBoxCurrent.y);
+    const sx2 = Math.max(this._nodeSelBBoxStart.x, this._nodeSelBBoxCurrent.x);
+    const sy2 = Math.max(this._nodeSelBBoxStart.y, this._nodeSelBBoxCurrent.y);
+
+    if (sx2 - sx1 < 5 && sy2 - sy1 < 5) return;
+
+    const path = this.#stateMachine.selectedPath;
+    if (!path) return;
+
+    const selected = [];
+    path.points.forEach((p, i) => {
+      const sp = this.#docToScreen(p.x, p.y);
+      if (sp.x >= sx1 && sp.x <= sx2 && sp.y >= sy1 && sp.y <= sy2) {
+        selected.push(i);
+      }
+    });
+    this.#stateMachine.selectedNodes = selected;
+  }
+
+  /**
+   * Dessine la boîte de sélection des nœuds (couleur différente).
+   */
+  _drawNodeSelBBox() {
+    if (!this._nodeSelBBoxStart || !this._nodeSelBBoxCurrent) return;
+    const sx1 = this._nodeSelBBoxStart.x;
+    const sy1 = this._nodeSelBBoxStart.y;
+    const sx2 = this._nodeSelBBoxCurrent.x;
+    const sy2 = this._nodeSelBBoxCurrent.y;
+    const x = Math.min(sx1, sx2);
+    const y = Math.min(sy1, sy2);
+    const w = Math.abs(sx2 - sx1);
+    const h = Math.abs(sy2 - sy1);
+    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    rect.setAttribute('x', x);
+    rect.setAttribute('y', y);
+    rect.setAttribute('width', w);
+    rect.setAttribute('height', h);
+    rect.setAttribute('fill', 'rgba(105,240,174,0.1)');
+    rect.setAttribute('stroke', '#69f0ae');
+    rect.setAttribute('stroke-width', '2');
+    rect.setAttribute('stroke-dasharray', '4 3');
+    rect.setAttribute('pointer-events', 'none');
+    this.#svgSelection.appendChild(rect);
   }
 }
