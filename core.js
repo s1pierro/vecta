@@ -539,10 +539,6 @@ class DrawArea {
       pathEl.setAttribute('stroke-linejoin', 'round');
       pathEl.setAttribute('data-index', index);
 
-      if (selectedPath === path) {
-        pathEl.setAttribute('class', 'selected');
-      }
-
       this.#svgPaths.appendChild(pathEl);
     });
 
