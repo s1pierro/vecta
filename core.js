@@ -452,6 +452,7 @@ class DrawArea {
   #backgroundRect;
   #svgPaths;
   #svgCurrentPath;
+  #svgSelection;
   #touchOverlay;
 
   constructor(stateMachine) {
@@ -486,11 +487,15 @@ class DrawArea {
     this.#svgPaths = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     this.#svgPaths.setAttribute('id', 'svgPaths');
 
+    this.#svgSelection = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    this.#svgSelection.setAttribute('id', 'svgSelection');
+
     this.#svgCurrentPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     this.#svgCurrentPath.setAttribute('id', 'currentPath');
 
     this.#svg.appendChild(this.#backgroundRect);
     this.#svg.appendChild(this.#svgPaths);
+    this.#svg.appendChild(this.#svgSelection);
     this.#svg.appendChild(this.#svgCurrentPath);
     drawArea.appendChild(this.#svg);
     this.#el = drawArea;
@@ -552,6 +557,36 @@ class DrawArea {
     } else {
       this.#svgCurrentPath.setAttribute('d', '');
     }
+
+    // Selection bounding box
+    this.#svgSelection.innerHTML = '';
+    if (selectedPath && selectedPath.points && selectedPath.points.length >= 2) {
+      const bbox = this.#computeBBox(selectedPath.points);
+      const padding = 4;
+      const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      rect.setAttribute('x', bbox.minX - padding);
+      rect.setAttribute('y', bbox.minY - padding);
+      rect.setAttribute('width', bbox.maxX - bbox.minX + padding * 2);
+      rect.setAttribute('height', bbox.maxY - bbox.minY + padding * 2);
+      rect.setAttribute('rx', '4');
+      rect.setAttribute('fill', 'none');
+      rect.setAttribute('stroke', '#4fc3f7');
+      rect.setAttribute('stroke-width', '2');
+      rect.setAttribute('stroke-dasharray', '6 3');
+      rect.setAttribute('pointer-events', 'none');
+      this.#svgSelection.appendChild(rect);
+    }
+  }
+
+  #computeBBox(points) {
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const p of points) {
+      if (p.x < minX) minX = p.x;
+      if (p.y < minY) minY = p.y;
+      if (p.x > maxX) maxX = p.x;
+      if (p.y > maxY) maxY = p.y;
+    }
+    return { minX, minY, maxX, maxY };
   }
 
   _findPathAtPoint(x, y) {
