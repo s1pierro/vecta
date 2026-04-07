@@ -30,7 +30,7 @@
     }
     #app-ground {
       width: 100%;
-      height: calc(100% - 2em - 1.6em);
+      height: calc(100% - 2em);
       display: flex;
     }
     #statusBar {
@@ -57,9 +57,13 @@
       color: #4fc3f7;
     }
 
-    /* Raw states bar — debug overlay above statusBar */
+    /* Raw states bar — debug overlay, fixed above everything */
     #rawStatesBar {
-      width: 100%;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 9999;
       min-height: 1.6em;
       background: rgba(20, 20, 35, 0.97);
       display: flex;
@@ -67,9 +71,13 @@
       align-items: center;
       padding: 3px 8px;
       gap: 8px;
-      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.15);
       font-size: 0.65em;
       font-family: 'SF Mono', 'Fira Code', monospace;
+      pointer-events: none;
+    }
+    #rawStatesBar .raw-chip {
+      pointer-events: auto;
     }
     .raw-state-group {
       display: flex;

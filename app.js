@@ -110,8 +110,9 @@ class Application {
         '<span class="raw-chip" data-state="tnt:pinching">pinching</span>' +
         '<span class="raw-chip" data-state="tnt:catching">catching</span>' +
       '</div>';
-    // Insert before statusBar so it appears on top
-    container.insertBefore(rawBar, statusBar);
+    container.appendChild(statusBar);
+    // Append to body so fixed positioning works from viewport top
+    document.body.appendChild(rawBar);
   }
 
   #init() {
