@@ -34,10 +34,10 @@ class State {
     this.#exclusiveFields = Array.isArray(config.exclusiveFields) ? [...config.exclusiveFields] : [];
     this.#priority = typeof config.priority === 'number' ? config.priority : 0;
 
-    // Conditions — return true by default (no restriction)
-    this.#activationCondition = config.activationCondition || null;
-    this.#maintainCondition = config.maintainCondition || null;
-    this.#deactivationCondition = config.deactivationCondition || null;
+    // Conditions — accept fn strings or null
+    this.#activationCondition = this.#parseCondition(config.activationCondition);
+    this.#maintainCondition = this.#parseCondition(config.maintainCondition);
+    this.#deactivationCondition = this.#parseCondition(config.deactivationCondition);
 
     // Lifecycle hooks
     this.#onEnter = config.onEnter || null;
@@ -49,6 +49,17 @@ class State {
     this.#meta = config.meta || {};
   }
 
+  #parseCondition(cond) {
+    if (!cond) return null;
+    if (typeof cond === 'function') return cond;
+    if (typeof cond === 'string' && cond.trim()) {
+      try {
+        return new Function('c', `return (${cond})(c)`);
+      } catch { return null; }
+    }
+    return null;
+  }
+
   // ── Getters ──
   get name() { return this.#name; }
   get type() { return this.#type; }
@@ -58,70 +69,37 @@ class State {
   get tags() { return [...this.#tags]; }
   get meta() { return { ...this.#meta }; }
 
-  /**
-   * Check if this state can activate given the current machine context.
-   * @param {object} ctx — machine context (state, helpers, etc.)
-   * @returns {boolean}
-   */
   canActivate(ctx) {
     return this.#activationCondition ? this.#activationCondition(ctx) : true;
   }
 
-  /**
-   * Check if this state should remain active.
-   * @param {object} ctx
-   * @returns {boolean}
-   */
   shouldMaintain(ctx) {
     return this.#maintainCondition ? this.#maintainCondition(ctx) : true;
   }
 
-  /**
-   * Check if this state should deactivate.
-   * @param {object} ctx
-   * @returns {boolean}
-   */
   shouldDeactivate(ctx) {
     return this.#deactivationCondition ? this.#deactivationCondition(ctx) : false;
   }
 
-  /**
-   * Enter hook.
-   * @param {object} ctx
-   */
   enter(ctx) {
     if (this.#onEnter) this.#onEnter(ctx);
   }
 
-  /**
-   * Exit hook.
-   * @param {object} ctx
-   */
   exit(ctx) {
     if (this.#onExit) this.#onExit(ctx);
   }
 
-  /**
-   * Maintain tick.
-   * @param {object} ctx
-   * @param {number} dt — delta time
-   */
   maintain(ctx, dt) {
     if (this.#onMaintain) this.#onMaintain(ctx, dt);
   }
 
-  /**
-   * Check if this state shares an exclusive field with another state.
-   * @param {State} other
-   * @returns {string[]} — list of conflicting exclusive fields
-   */
   getExclusiveConflicts(other) {
     if (!(other instanceof State)) return [];
     return this.#exclusiveFields.filter(f => other.exclusiveFields.includes(f));
   }
 
   /**
-   * Return a plain serializable representation.
+   * Return a plain serializable representation (for storage/export).
    */
   toJSON() {
     return {
@@ -131,8 +109,96 @@ class State {
       exclusiveFields: this.#exclusiveFields,
       priority: this.#priority,
       tags: this.#tags,
-      meta: this.#meta
+      meta: this.#meta,
+      activationCondition: null,
+      maintainCondition: null,
+      deactivationCondition: null
     };
+  }
+
+  /**
+   * Return a raw definition including condition strings for editing.
+   */
+  toDefinition() {
+    return {
+      name: this.#name,
+      type: this.#type,
+      family: this.#family,
+      exclusiveFields: this.#exclusiveFields,
+      priority: this.#priority,
+      tags: this.#tags,
+      meta: this.#meta,
+      activationCondition: null,
+      maintainCondition: null,
+      deactivationCondition: null,
+      onEnter: null,
+      onExit: null,
+      onMaintain: null
+    };
+  }
+}
+
+/**
+ * StateLoader — loads state definitions from localStorage or server.
+ *
+ * Flow:
+ * 1. Check localStorage for 'vectux_states'
+ * 2. If empty → fetch defaultStates.json → save to localStorage
+ * 3. Return parsed definitions
+ */
+class StateLoader {
+  static STORAGE_KEY = 'vectux_states';
+  static DEFAULT_URL = 'defaultStates.json';
+
+  /**
+   * Load state definitions.
+   * @returns {Promise<Array>} — array of state definition objects
+   */
+  static async load() {
+    const stored = localStorage.getItem(this.STORAGE_KEY);
+    if (stored) {
+      try { return JSON.parse(stored); }
+      catch { console.warn('Invalid states in localStorage, fetching defaults...'); }
+    }
+    return await this.fetchDefaults();
+  }
+
+  /**
+   * Save state definitions to localStorage.
+   * @param {Array} definitions
+   */
+  static save(definitions) {
+    localStorage.setItem(this.STORAGE_KEY, JSON.stringify(definitions, null, 2));
+  }
+
+  /**
+   * Fetch default states from server.
+   */
+  static async fetchDefaults() {
+    try {
+      const res = await fetch(this.DEFAULT_URL);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const defs = await res.json();
+      this.save(defs);
+      return defs;
+    } catch (e) {
+      console.error('Failed to fetch default states:', e);
+      return [];
+    }
+  }
+
+  /**
+   * Export states as a downloadable JSON file.
+   */
+  static export(filename = 'vectux-states.json') {
+    const stored = localStorage.getItem(this.STORAGE_KEY) || '[]';
+    const blob = new Blob([stored], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 }
 
@@ -570,72 +636,82 @@ class StateMachine {
     };
     this.#listeners = {};
     this.#saveState();
-    this.#registerDefaultStates();
+    // States loaded async via loadStates()
   }
 
   /**
-   * Register built-in application states.
+   * Load state definitions from StateLoader and register them.
+   * Must be called once at startup (async).
    */
-  #registerDefaultStates() {
-    const ctx = () => this.state;
+  async loadStates() {
+    const definitions = await StateLoader.load();
+    this.#stateRegistry.clear();
+    this.#activeStates.clear();
+    for (const def of definitions) {
+      this.#registerFromDefinition(def);
+    }
+    this.#attachStateHooks();
+    // Activate defaults: drawingTool + draw
+    this.activateState('drawingTool', this.state);
+    this.activateState('draw', this.state);
+  }
 
-    // ── Mode states ──
-    this.registerState(new State({
-      name: 'drawingTool',
-      type: 'mode',
-      family: 'appMode',
-      exclusiveFields: ['mainMode'],
-      priority: 0,
-      onEnter: () => this.#emit('modeChange', 'drawingTool'),
-      tags: ['mode', 'drawing']
-    }));
+  /**
+   * Attach event-emitting hooks to registered states.
+   */
+  #attachStateHooks() {
+    for (const state of this.#stateRegistry.values()) {
+      // Override enter to emit events
+      const origEnter = state.enter.bind(state);
+      state._onEnter = (ctx) => {
+        origEnter(ctx);
+        if (state.type === 'mode') this.#emit('modeChange', state.name);
+        if (state.type === 'tool') this.#emit('toolChange', state.name);
+      };
+    }
+  }
 
-    this.registerState(new State({
-      name: 'selection',
-      type: 'mode',
-      family: 'appMode',
-      exclusiveFields: ['mainMode'],
-      priority: 0,
-      onEnter: () => this.#emit('modeChange', 'selection'),
-      tags: ['mode', 'editing']
-    }));
+  /**
+   * Register a state from a plain definition object.
+   */
+  #registerFromDefinition(def) {
+    const state = new State(def);
+    this.#stateRegistry.set(state.name, state);
+  }
 
-    // ── Tool states ──
-    this.registerState(new State({
-      name: 'draw',
-      type: 'tool',
-      family: 'currentTool',
-      exclusiveFields: ['activeTool'],
-      priority: 0,
-      activationCondition: (c) => c.mode === 'drawingTool',
-      onEnter: () => this.#emit('toolChange', 'draw'),
-      tags: ['tool', 'drawing']
-    }));
+  /**
+   * Get all state definitions (for editor/export).
+   * @returns {Array}
+   */
+  getStateDefinitions() {
+    const defs = [];
+    for (const s of this.#stateRegistry.values()) {
+      defs.push(s.toDefinition());
+    }
+    return defs;
+  }
 
-    this.registerState(new State({
-      name: 'select',
-      type: 'tool',
-      family: 'currentTool',
-      exclusiveFields: ['activeTool'],
-      priority: 0,
-      onEnter: () => this.#emit('toolChange', 'select'),
-      tags: ['tool', 'editing']
-    }));
+  /**
+   * Replace all state definitions and re-register.
+   * Saves to localStorage.
+   */
+  setStateDefinitions(definitions) {
+    // Preserve lifecycle hooks from existing states
+    const hooks = new Map();
+    for (const s of this.#stateRegistry.values()) {
+      hooks.set(s.name, { onEnter: s._onEnter, onExit: s._onExit, onMaintain: s._onMaintain });
+    }
 
-    this.registerState(new State({
-      name: 'pan',
-      type: 'tool',
-      family: 'currentTool',
-      exclusiveFields: ['activeTool'],
-      priority: 0,
-      activationCondition: (c) => c.mode === 'drawingTool',
-      onEnter: () => this.#emit('toolChange', 'pan'),
-      tags: ['tool', 'navigation']
-    }));
+    this.#stateRegistry.clear();
+    this.#activeStates.clear();
+    for (const def of definitions) {
+      this.#registerFromDefinition(def);
+    }
+    StateLoader.save(definitions);
 
-    // Activate defaults: drawingTool mode + draw tool
-    this.activateState('drawingTool', ctx());
-    this.activateState('draw', ctx());
+    // Re-activate defaults
+    this.activateState('drawingTool', this.state);
+    this.activateState('draw', this.state);
   }
 
   // ── State registry API ──

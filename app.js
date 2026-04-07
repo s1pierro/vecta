@@ -314,8 +314,15 @@ class Application {
     this.#corePanel = new CorePanel(this.#statesMachine, this.#selectionManager, this.#subWindowManager);
     this.#drawArea = new DrawArea(this.#statesMachine, this.#selectionManager);
 
-    this.buildDom(options.container || document.body);
-    this.#init();
+    // Init states async then build DOM
+    this.#init().then(() => {
+      this.buildDom(options.container || document.body);
+      this.#wireEvents();
+    });
+  }
+
+  async #init() {
+    await this.#statesMachine.loadStates();
   }
 
   get drawArea() {
@@ -395,11 +402,15 @@ class Application {
       '</div>';
     container.appendChild(rawBar);
 
-    // Register raw-states modal as a SubWindow
+    // Register raw-states modal as a SubWindow with state editor
     const rawContentFn = () => {
       const body = document.createElement('div');
-      body.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;';
-      body.innerHTML =
+      body.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;flex-direction:column;';
+
+      // State chips section
+      const chipsSection = document.createElement('div');
+      chipsSection.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;';
+      chipsSection.innerHTML =
         '<div class="raw-state-group">' +
           '<span class="raw-label">mode</span>' +
           '<span class="raw-chip" data-state="mode:drawingTool">drawingTool</span>' +
@@ -435,6 +446,48 @@ class Application {
           '<span class="raw-chip" data-state="tnt:pinching">pinching</span>' +
           '<span class="raw-chip" data-state="tnt:catching">catching</span>' +
         '</div>';
+      body.appendChild(chipsSection);
+
+      // Separator
+      const sep = document.createElement('div');
+      sep.style.cssText = 'height:1px;background:rgba(255,255,255,0.08);width:100%;';
+      body.appendChild(sep);
+
+      // State definitions editor
+      const editorSection = document.createElement('div');
+      editorSection.style.cssText = 'display:flex;flex-direction:column;gap:6px;';
+      editorSection.innerHTML =
+        '<div style="display:flex;align-items:center;justify-content:space-between;">' +
+          '<span style="color:rgba(255,255,255,0.35);font-size:0.65em;text-transform:uppercase;letter-spacing:1px;">State Definitions</span>' +
+          '<button id="rawExportBtn" style="padding:2px 8px;background:rgba(79,195,247,0.15);border:1px solid rgba(79,195,247,0.3);border-radius:3px;color:#4fc3f7;cursor:pointer;font-size:0.65em;">Export</button>' +
+        '</div>' +
+        '<textarea id="rawStateEditor" style="width:100%;height:120px;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.1);border-radius:4px;color:rgba(255,255,255,0.7);font-family:monospace;font-size:0.7em;padding:4px;resize:vertical;"></textarea>' +
+        '<button id="rawApplyBtn" style="padding:4px 12px;background:rgba(105,240,174,0.15);border:1px solid rgba(105,240,174,0.3);border-radius:3px;color:#69f0ae;cursor:pointer;font-size:0.7em;align-self:flex-start;">Apply</button>';
+      body.appendChild(editorSection);
+
+      // Wire editor
+      setTimeout(() => {
+        const editor = document.getElementById('rawStateEditor');
+        const applyBtn = document.getElementById('rawApplyBtn');
+        const exportBtn = document.getElementById('rawExportBtn');
+        if (editor && applyBtn) {
+          const defs = this.#statesMachine.getStateDefinitions();
+          editor.value = JSON.stringify(defs, null, 2);
+          applyBtn.addEventListener('click', () => {
+            try {
+              const newDefs = JSON.parse(editor.value);
+              this.#statesMachine.setStateDefinitions(newDefs);
+              editor.value = JSON.stringify(this.#statesMachine.getStateDefinitions(), null, 2);
+            } catch (e) {
+              editor.value = 'Error: ' + e.message;
+            }
+          });
+        }
+        if (exportBtn) {
+          exportBtn.addEventListener('click', () => StateLoader.export());
+        }
+      }, 0);
+
       return body;
     };
     this.#subWindowManager.addWindow('rawStates', {
@@ -659,7 +712,7 @@ class Application {
     });
   }
 
-  #init() {
+  #wireEvents() {
     this.#touchOverlay = new TouchOverlay(this.#drawArea.touchOverlayElement, {
       dist: 5,
       tappingToPressingFrontier: 600,

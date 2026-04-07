@@ -1,0 +1,57 @@
+[
+  {
+    "name": "drawingTool",
+    "type": "mode",
+    "family": "appMode",
+    "exclusiveFields": ["mainMode"],
+    "priority": 0,
+    "activationCondition": null,
+    "maintainCondition": null,
+    "deactivationCondition": null,
+    "tags": ["mode", "drawing"]
+  },
+  {
+    "name": "selection",
+    "type": "mode",
+    "family": "appMode",
+    "exclusiveFields": ["mainMode"],
+    "priority": 0,
+    "activationCondition": null,
+    "maintainCondition": null,
+    "deactivationCondition": null,
+    "tags": ["mode", "editing"]
+  },
+  {
+    "name": "draw",
+    "type": "tool",
+    "family": "currentTool",
+    "exclusiveFields": ["activeTool"],
+    "priority": 0,
+    "activationCondition": "c => c.mode === 'drawingTool'",
+    "maintainCondition": null,
+    "deactivationCondition": null,
+    "tags": ["tool", "drawing"]
+  },
+  {
+    "name": "select",
+    "type": "tool",
+    "family": "currentTool",
+    "exclusiveFields": ["activeTool"],
+    "priority": 0,
+    "activationCondition": null,
+    "maintainCondition": null,
+    "deactivationCondition": null,
+    "tags": ["tool", "editing"]
+  },
+  {
+    "name": "pan",
+    "type": "tool",
+    "family": "currentTool",
+    "exclusiveFields": ["activeTool"],
+    "priority": 0,
+    "activationCondition": "c => c.mode === 'drawingTool'",
+    "maintainCondition": null,
+    "deactivationCondition": null,
+    "tags": ["tool", "navigation"]
+  }
+]
