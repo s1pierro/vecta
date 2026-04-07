@@ -56,7 +56,8 @@ class StateMachine {
       currentSize: 8,
       paths: [],
       currentPath: null,
-      selectedPath: null
+      selectedPath: null,
+      selectables: 'objects'
     };
     this.#listeners = {};
     this.#saveState();
@@ -87,7 +88,18 @@ class StateMachine {
   set currentPath(v) { this.#state.currentPath = v; this.#emit('currentPathChange', v); }
 
   get selectedPath() { return this.#state.selectedPath; }
-  set selectedPath(v) { this.#state.selectedPath = v; this.#emit('selectedPathChange', v); }
+  set selectedPath(v) {
+    this.#state.selectedPath = v;
+    this.#state.selectables = v ? 'nodes' : 'objects';
+    this.#emit('selectablesChange', this.#state.selectables);
+    this.#emit('selectedPathChange', v);
+  }
+
+  get selectables() { return this.#state.selectables; }
+  set selectables(v) {
+    this.#state.selectables = v;
+    this.#emit('selectablesChange', v);
+  }
 
   on(event, callback) {
     if (!this.#listeners[event]) this.#listeners[event] = [];
@@ -187,6 +199,7 @@ class StateMachine {
     this.#state.currentPath = null;
     if (newMode !== 'selection') {
       this.#state.selectedPath = null;
+      this.#state.selectables = 'objects';
       this.#emit('selectedPathChange', null);
     }
     this.#state.mode = newMode;
@@ -620,7 +633,37 @@ class DrawArea {
       this.#svgCurrentPath.setAttribute('d', '');
     }
 
+    // Selection bounding box rectangle (draw tool)
+    this._drawSelBBox();
+
     this._redrawSelection();
+  }
+
+  /**
+   * Dessine le rectangle de sélection temporaire en mode sélection.
+   */
+  _drawSelBBox() {
+    this.#svgSelection.innerHTML = '';
+    if (!this._selBBoxStart || !this._selBBoxCurrent) return;
+    const sx1 = this._selBBoxStart.x;
+    const sy1 = this._selBBoxStart.y;
+    const sx2 = this._selBBoxCurrent.x;
+    const sy2 = this._selBBoxCurrent.y;
+    const x = Math.min(sx1, sx2);
+    const y = Math.min(sy1, sy2);
+    const w = Math.abs(sx2 - sx1);
+    const h = Math.abs(sy2 - sy1);
+    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    rect.setAttribute('x', x);
+    rect.setAttribute('y', y);
+    rect.setAttribute('width', w);
+    rect.setAttribute('height', h);
+    rect.setAttribute('fill', 'rgba(79,195,247,0.1)');
+    rect.setAttribute('stroke', '#4fc3f7');
+    rect.setAttribute('stroke-width', '2');
+    rect.setAttribute('stroke-dasharray', '4 3');
+    rect.setAttribute('pointer-events', 'none');
+    this.#svgSelection.appendChild(rect);
   }
 
   /**
@@ -629,7 +672,8 @@ class DrawArea {
   _redrawSelection() {
     this.#svgUI.innerHTML = '';
     const selectedPath = this.#stateMachine.selectedPath;
-    if (!selectedPath || !selectedPath.points || selectedPath.points.length < 2) {
+    if (!selectedPath || !selectedPath.points || selectedPath.points.length < 2 ||
+        this.#stateMachine.selectables !== 'nodes') {
       this._clearHandleDrag();
       return;
     }
@@ -896,34 +940,51 @@ class DrawArea {
     this.#stateMachine.on('currentPathChange', () => this._redraw());
     this.#stateMachine.on('selectedPathChange', () => this._redraw());
 
+    // Cursor events — drawing or selection bbox
     overlay.engine.on('cursorActivate', (e) => {
-      if (this.#stateMachine.mode !== 'drawingTool') return;
-      const pt = this.#screenToDoc(e.touchX, e.touchY);
-      this.#stateMachine.currentPath = [{ x: pt.x, y: pt.y }];
+      if (this.#stateMachine.mode === 'drawingTool') {
+        const pt = this.#screenToDoc(e.touchX, e.touchY);
+        this.#stateMachine.currentPath = [{ x: pt.x, y: pt.y }];
+      } else if (this.#stateMachine.mode === 'selection' && this.#stateMachine.selectables === 'objects') {
+        const doc = this.#screenToDoc(e.touchX, e.touchY);
+        this._selBBoxStart = doc;
+        this._selBBoxCurrent = doc;
+      }
     });
 
     overlay.engine.on('cursorMove', (e) => {
-      if (this.#stateMachine.mode !== 'drawingTool') return;
-      const path = this.#stateMachine.currentPath;
-      if (path) {
-        const pt = this.#screenToDoc(e.touchX, e.touchY);
-        path.push({ x: pt.x, y: pt.y });
+      if (this.#stateMachine.mode === 'drawingTool') {
+        const path = this.#stateMachine.currentPath;
+        if (path) {
+          const pt = this.#screenToDoc(e.touchX, e.touchY);
+          path.push({ x: pt.x, y: pt.y });
+          this._redraw();
+        }
+      } else if (this.#stateMachine.mode === 'selection' && this.#stateMachine.selectables === 'objects') {
+        this._selBBoxCurrent = this.#screenToDoc(e.touchX, e.touchY);
         this._redraw();
       }
     });
 
     overlay.engine.on('cursorRelease', (e) => {
-      if (this.#stateMachine.mode !== 'drawingTool') return;
-      const path = this.#stateMachine.currentPath;
-      if (path && path.length > 1) {
-        this.#stateMachine.addPath({
-          points: path,
-          color: this.#stateMachine.currentColor,
-          size: this.#stateMachine.currentSize
-        });
+      if (this.#stateMachine.mode === 'drawingTool') {
+        const path = this.#stateMachine.currentPath;
+        if (path && path.length > 1) {
+          this.#stateMachine.addPath({
+            points: path,
+            color: this.#stateMachine.currentColor,
+            size: this.#stateMachine.currentSize
+          });
+        }
+        this.#stateMachine.currentPath = null;
+      } else if (this.#stateMachine.mode === 'selection' && this.#stateMachine.selectables === 'objects') {
+        this._selectInBBox();
+        this._selBBoxStart = null;
+        this._selBBoxCurrent = null;
       }
-      this.#stateMachine.currentPath = null;
     });
+    this._selBBoxStart = null;
+    this._selBBoxCurrent = null;
 
     overlay.engine.on('tap', (e) => {
       if (this.#stateMachine.mode === 'selection') {
@@ -993,9 +1054,14 @@ class DrawArea {
     const sx = touch.clientX - rect.left;
     const sy = touch.clientY - rect.top;
 
+    // In 'objects' mode, don't intercept any handles (bbox selection uses cursor)
+    if (this.#stateMachine.selectables === 'objects') return;
+
+    // In 'nodes' mode, only match node handles (not bbox handles)
     let hit = null;
     let minDist = Infinity;
     for (const h of this._handleCenters) {
+      if (!h.name.startsWith('node:')) continue;
       const d = Math.hypot(sx - h.x, sy - h.y);
       if (d < minDist) { minDist = d; hit = h; }
     }
@@ -1004,5 +1070,33 @@ class DrawArea {
       e.stopPropagation();
       this._startHandleDrag(hit.name, sx, sy);
     }
+  }
+
+  /**
+   * Sélectionne le premier chemin dont un nœud est dans la boîte de sélection.
+   */
+  _selectInBBox() {
+    if (!this._selBBoxStart || !this._selBBoxCurrent) return;
+    const x1 = Math.min(this._selBBoxStart.x, this._selBBoxCurrent.x);
+    const y1 = Math.min(this._selBBoxStart.y, this._selBBoxCurrent.y);
+    const x2 = Math.max(this._selBBoxStart.x, this._selBBoxCurrent.x);
+    const y2 = Math.max(this._selBBoxStart.y, this._selBBoxCurrent.y);
+
+    // Ignorer si trop petit (c'était un tap)
+    if (x2 - x1 < 5 && y2 - y1 < 5) return;
+
+    const paths = this.#stateMachine.paths;
+    let found = null;
+    for (let i = paths.length - 1; i >= 0; i--) {
+      const path = paths[i];
+      for (const p of path.points) {
+        if (p.x >= x1 && p.x <= x2 && p.y >= y1 && p.y <= y2) {
+          found = path;
+          break;
+        }
+      }
+      if (found) break;
+    }
+    this.#stateMachine.selectedPath = found || null;
   }
 }

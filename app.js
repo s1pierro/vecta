@@ -67,8 +67,9 @@ class Application {
 
     const statusBar = document.createElement('div');
     statusBar.id = 'statusBar';
-    statusBar.innerHTML = 
+    statusBar.innerHTML =
       '<span><span class="label">Mode:</span><span class="value" id="statusMode">-</span></span>' +
+      '<span><span class="label">Selectables:</span><span class="value" id="statusSelectables">objects</span></span>' +
       '<span><span class="label">Tool:</span><span class="value" id="statusTool">-</span></span>' +
       '<span><span class="label">Couleur:</span><span class="value" id="statusColor">-</span></span>' +
       '<span><span class="label">Taille:</span><span class="value" id="statusSize">-</span></span>' +
@@ -104,6 +105,10 @@ class Application {
       this.#corePanel.syncSelection(path);
       this.#updateStatusBar();
     });
+    this.#statesMachine.on('selectablesChange', () => {
+      this.#drawArea._redraw();
+      this.#updateStatusBar();
+    });
     this.#statesMachine.on('pathsChange', () => {
       const path = this.#statesMachine.selectedPath;
       if (path) this.#corePanel.syncSelection(path);
@@ -135,6 +140,8 @@ class Application {
       const selected = this.#statesMachine.selectedPath;
       statusSelected.textContent = selected ? `${selected.color}, ${selected.size}px` : '-';
     }
+    const statusSelectables = document.getElementById('statusSelectables');
+    if (statusSelectables) statusSelectables.textContent = this.#statesMachine.selectables;
   }
 }
 
