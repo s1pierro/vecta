@@ -628,21 +628,105 @@ class Application {
       height: '50vh'
     });
 
-    // Color picker SubWindow
+    // Color picker SubWindow with custom color selector
+    const COLOR_STORAGE_KEY = 'vectux_colors';
+
+    const loadColors = () => {
+      try {
+        const saved = localStorage.getItem(COLOR_STORAGE_KEY);
+        if (saved) return JSON.parse(saved);
+      } catch {}
+      return ['#000000', '#ffffff', '#ff5252', '#4fc3f7', '#69f0ae', '#ffd54f', '#ba68c8', '#ff9800', '#212121'];
+    };
+
+    const saveColors = (colors) => {
+      localStorage.setItem(COLOR_STORAGE_KEY, JSON.stringify(colors));
+    };
+
+    let colors = loadColors();
+
     const colorContentFn = () => {
       const body = document.createElement('div');
-      body.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;justify-content:center;';
-      const colorList = ['#000000', '#ffffff', '#ff5252', '#4fc3f7', '#69f0ae', '#ffd54f', '#ba68c8', '#ff9800', '#212121'];
-      colorList.forEach((color, i) => {
-        const btn = document.createElement('button');
-        btn.className = 'panel-color-btn' + (i === 0 ? ' active' : '');
-        btn.dataset.color = color;
-        btn.style.cssText = `background:${color};width:32px;height:32px;border-radius:4px;border:2px solid rgba(255,255,255,0.2);cursor:pointer;`;
-        btn.addEventListener('click', () => {
-          this.#corePanel.selectColor(color);
+      body.style.cssText = 'display:flex;flex-direction:column;gap:8px;padding:8px;';
+
+      // Color grid
+      const grid = document.createElement('div');
+      grid.className = 'color-grid';
+      grid.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;justify-content:center;';
+      body.appendChild(grid);
+
+      // Separator
+      const sep = document.createElement('div');
+      sep.style.cssText = 'height:1px;background:rgba(255,255,255,0.08);width:100%;';
+      body.appendChild(sep);
+
+      // Custom color row
+      const customRow = document.createElement('div');
+      customRow.style.cssText = 'display:flex;gap:6px;align-items:center;justify-content:center;';
+
+      const colorInput = document.createElement('input');
+      colorInput.type = 'color';
+      colorInput.value = '#000000';
+      colorInput.style.cssText = 'width:32px;height:32px;border:none;border-radius:4px;cursor:pointer;background:transparent;padding:0;';
+      customRow.appendChild(colorInput);
+
+      const addBtn = document.createElement('button');
+      addBtn.className = 'color-add-btn';
+      addBtn.style.cssText = 'width:32px;height:32px;border-radius:4px;border:1px solid rgba(255,255,255,0.2);background:rgba(105,240,174,0.1);color:#69f0ae;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;';
+      addBtn.textContent = '+';
+      customRow.appendChild(addBtn);
+      body.appendChild(customRow);
+
+      const renderGrid = () => {
+        grid.innerHTML = '';
+        colors.forEach((color, i) => {
+          const btn = document.createElement('button');
+          btn.className = 'panel-color-btn' + (this.#statesMachine.currentColor === color ? ' active' : '');
+          btn.dataset.color = color;
+          btn.style.cssText = `background:${color};width:32px;height:32px;border-radius:4px;border:2px solid rgba(255,255,255,0.2);cursor:pointer;position:relative;`;
+
+          // Delete button on hover (not for first 3 default colors)
+          if (i >= 3) {
+            btn.title = 'Click: select | Long press: remove';
+            let pressTimer;
+            btn.addEventListener('touchstart', (e) => {
+              pressTimer = setTimeout(() => {
+                colors.splice(i, 1);
+                saveColors(colors);
+                renderGrid();
+              }, 500);
+            });
+            btn.addEventListener('touchend', () => clearTimeout(pressTimer));
+            btn.addEventListener('touchcancel', () => clearTimeout(pressTimer));
+            btn.addEventListener('contextmenu', (e) => {
+              e.preventDefault();
+              colors.splice(i, 1);
+              saveColors(colors);
+              renderGrid();
+            });
+          }
+
+          btn.addEventListener('click', () => {
+            this.#corePanel.selectColor(color);
+          });
+          grid.appendChild(btn);
         });
-        body.appendChild(btn);
+      };
+
+      renderGrid();
+
+      addBtn.addEventListener('click', () => {
+        const c = colorInput.value;
+        if (!colors.includes(c)) {
+          colors.push(c);
+          saveColors(colors);
+          renderGrid();
+        }
       });
+
+      // Listen for color changes to update active state
+      this.#statesMachine.on('colorChange', () => renderGrid());
+
       return body;
     };
     this.#subWindowManager.addWindow('colorPicker', {
@@ -651,7 +735,7 @@ class Application {
       content: colorContentFn,
       left: '60vw',
       top: '10vh',
-      width: '200px',
+      width: '220px',
       height: 'auto'
     });
 
@@ -882,7 +966,7 @@ class Application {
 
   #wireEvents() {
     this.#touchOverlay = new TouchOverlay(this.#drawArea.touchOverlayElement, {
-      dist: 5,
+      dist: 0,
       tappingToPressingFrontier: 600,
       pressingToLongPressingFrontier: 1950,
       contactSize: 24,
