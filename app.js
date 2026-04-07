@@ -610,7 +610,7 @@ class Application {
     const sizeContentFn = () => {
       const body = document.createElement('div');
       body.className = 'size-selector-container';
-      body.style.cssText = 'display:flex;flex-direction:column;gap:12px;padding:12px;';
+      body.style.cssText = 'display:flex;flex-direction:column;gap:12px;padding:12px;min-width:200px;box-sizing:border-box;';
 
       const sizes = [2, 4, 6, 8, 10, 14, 20, 28];
       const minSize = sizes[0];
@@ -619,14 +619,14 @@ class Application {
       // Value display
       const valueDisplay = document.createElement('div');
       valueDisplay.className = 'size-value-display';
-      valueDisplay.style.cssText = 'text-align:center;font-size:0.8em;color:#4fc3f7;font-family:monospace;';
+      valueDisplay.style.cssText = 'text-align:center;font-size:0.8em;color:#4fc3f7;font-family:monospace;width:100%;';
       valueDisplay.textContent = this.#statesMachine.currentSize + 'px';
       body.appendChild(valueDisplay);
 
       // Slider track
       const track = document.createElement('div');
       track.className = 'size-track';
-      track.style.cssText = 'position:relative;height:50px;display:flex;align-items:center;width:100%;';
+      track.style.cssText = 'position:relative;height:50px;display:flex;align-items:center;flex:1;min-width:0;';
 
       // Tick marks + circles
       sizes.forEach((size) => {
