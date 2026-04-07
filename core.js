@@ -454,6 +454,11 @@ class DrawArea {
   #svgCurrentPath;
   #svgSelection;
   #touchOverlay;
+  #panX = 0;
+  #panY = 0;
+  #zoom = 1;
+  readonly #DOC_W = 2970;
+  readonly #DOC_H = 2100;
 
   constructor(stateMachine) {
     this.#stateMachine = stateMachine;
@@ -474,9 +479,9 @@ class DrawArea {
 
     this.#svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     this.#svg.setAttribute('id', 'drawAreaSvg');
-    this.#svg.setAttribute('viewBox', '0 0 2970 2100');
-    this.#svg.setAttribute('width', '2970');
-    this.#svg.setAttribute('height', '2100');
+    this.#svg.setAttribute('width', '100%');
+    this.#svg.setAttribute('height', '100%');
+    this.#applyTransform();
 
     this.#backgroundRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
     this.#backgroundRect.setAttribute('id', 'backgroundRect');
@@ -503,12 +508,52 @@ class DrawArea {
     container.appendChild(drawArea);
   }
 
+  /**
+   * Applique le transform (pan + zoom) au viewBox SVG.
+   */
+  #applyTransform() {
+    const vw = this.#DOC_W / this.#zoom;
+    const vh = this.#DOC_H / this.#zoom;
+    this.#svg.setAttribute('viewBox', `${this.#panX} ${this.#panY} ${vw} ${vh}`);
+  }
+
+  /**
+   * Convertit les coordonnées écran (relatives au container) en coordonnées document SVG.
+   * Prend en compte le pan et le zoom.
+   */
   #screenToDoc(screenX, screenY) {
     if (!this.#svg) return { x: screenX, y: screenY };
     const rect = this.#svg.getBoundingClientRect();
-    const docX = screenX - rect.left;
-    const docY = screenY - rect.top;
+    const px = screenX - rect.left;
+    const py = screenY - rect.top;
+    const vw = rect.width;
+    const vh = rect.height;
+    const viewBoxW = this.#DOC_W / this.#zoom;
+    const viewBoxH = this.#DOC_H / this.#zoom;
+    const docX = this.#panX + (px / vw) * viewBoxW;
+    const docY = this.#panY + (py / vh) * viewBoxH;
     return { x: docX, y: docY };
+  }
+
+  /**
+   * Déplace le viewport de dx/dy en coordonnées document.
+   */
+  #pan(dx, dy) {
+    this.#panX -= dx;
+    this.#panY -= dy;
+    this.#applyTransform();
+  }
+
+  /**
+   * Zoome autour d'un point document (px, py) avec le facteur donné.
+   */
+  #zoomAt(px, py, factor) {
+    const newZoom = Math.min(10, Math.max(0.1, this.#zoom * factor));
+    const scale = newZoom / this.#zoom;
+    this.#panX = px - (px - this.#panX) * scale;
+    this.#panY = py - (py - this.#panY) * scale;
+    this.#zoom = newZoom;
+    this.#applyTransform();
   }
 
   #pointsToSvgPath(points) {
@@ -652,6 +697,25 @@ class DrawArea {
       const newColor = this.#stateMachine.currentColor;
       this.#stateMachine.currentColor = newColor;
       this.#backgroundRect.setAttribute('fill', newColor);
+    });
+
+    // Pan via catch (2-finger gesture)
+    this._lastCatchDocPos = null;
+    overlay.engine.on('catchAt', (e) => {
+      const doc = this.#screenToDoc(e.x, e.y);
+      this._lastCatchDocPos = doc;
+    });
+    overlay.engine.on('catchMove', (e) => {
+      const doc = this.#screenToDoc(e.x, e.y);
+      if (this._lastCatchDocPos) {
+        const dx = doc.x - this._lastCatchDocPos.x;
+        const dy = doc.y - this._lastCatchDocPos.y;
+        this.#pan(dx, dy);
+      }
+      this._lastCatchDocPos = doc;
+    });
+    overlay.engine.on('catchDrop', () => {
+      this._lastCatchDocPos = null;
     });
   }
 }
