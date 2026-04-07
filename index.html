@@ -393,6 +393,7 @@
       color: #000000;
       border-radius: 6px;
       padding: 8px;
+      position: relative;
     }
     .jec-root-level .jec-label {
       color: rgba(0,0,0,0.6);
@@ -406,10 +407,35 @@
       color: rgba(0,0,0,0.4);
       background: rgba(0,0,0,0.08);
     }
-    /* Nested levels: moderate border */
+    /* Sticky names for root-level children */
+    .jec-root-level > .jec-items .jec-idx,
+    .jec-root-level > .jec-keys .jec-key-name {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      background: rgba(255,152,0,0.85);
+      backdrop-filter: blur(4px);
+      padding: 2px 4px;
+      border-radius: 3px;
+    }
+    /* Nested levels: moderate border + dim font */
     .jec-nested-level {
       background: rgba(255,255,255,0.02);
       border: 1px solid rgba(255,255,255,0.12);
+    }
+    /* Dim font for n+1 hierarchy */
+    .jec-nested-level .jec-key-name {
+      color: rgba(255,255,255,0.25);
+    }
+    .jec-nested-level .jec-idx {
+      color: rgba(255,255,255,0.2);
+    }
+    .jec-nested-level .jec-type-tag {
+      color: rgba(255,255,255,0.15);
+      background: rgba(255,255,255,0.02);
+    }
+    .jec-nested-level .jec-label {
+      color: rgba(255,255,255,0.25);
     }
     .jec-label-row {
       display: flex;
