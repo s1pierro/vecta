@@ -24,6 +24,7 @@ class JsonEditCard {
    * @param {boolean} [options.deletable=false] — show delete button
    * @param {string} [options.label] — optional label for this card
    * @param {Function} [options.onDelete] — callback when delete clicked
+   * @param {boolean} [options.inTypedArray=false] — true when inside a typed array
    */
   constructor(json, domDest, options = {}) {
     this.#json = json;
@@ -32,7 +33,8 @@ class JsonEditCard {
       showType: options.showType !== false,
       deletable: options.deletable === true,
       label: options.label || '',
-      onDelete: options.onDelete || null
+      onDelete: options.onDelete || null,
+      inTypedArray: options.inTypedArray === true
     };
     this.#build();
   }
@@ -74,6 +76,20 @@ class JsonEditCard {
     this.#domDest.appendChild(this.#root);
   }
 
+  /** Infer the common type of array elements */
+  static #inferArrayTypes(arr) {
+    if (arr.length === 0) return 'empty';
+    const types = arr.map(v => v === null ? 'null' : typeof v);
+    const unique = [...new Set(types)];
+    if (unique.length === 1) return unique[0];
+    // Check if all non-null items share a type
+    const nonNull = types.filter(t => t !== 'null');
+    if (nonNull.length === 0) return 'null';
+    const nonNullUnique = [...new Set(nonNull)];
+    if (nonNullUnique.length === 1) return `${nonNullUnique[0]}?`;
+    return 'mixed';
+  }
+
   /** Recursively render a value */
   #render(value) {
     if (value === null || value === undefined) {
@@ -94,21 +110,45 @@ class JsonEditCard {
     if (typeof value === 'object') {
       return this.#renderObject(value);
     }
-    // Fallback
     const span = document.createElement('span');
     span.textContent = String(value);
     return span;
   }
 
   #renderNull() {
-    const el = document.createElement('span');
-    el.className = 'jec-null';
-    el.textContent = 'null';
-    el.addEventListener('click', () => {
-      this.#emit(null);
+    if (this._options.inTypedArray) {
+      // Inside a typed array — just show null label
+      const el = document.createElement('span');
+      el.className = 'jec-null';
+      el.textContent = 'null';
+      return el;
+    }
+    // Not in typed array — show type selector
+    const wrapper = document.createElement('div');
+    wrapper.className = 'jec-null-editor';
+
+    const label = document.createElement('span');
+    label.className = 'jec-null-label';
+    label.textContent = 'null';
+    wrapper.appendChild(label);
+
+    const select = document.createElement('select');
+    select.className = 'jec-type-select';
+    select.innerHTML = '<option value="">→ type</option><option value="string">string</option><option value="number">number</option><option value="boolean">boolean</option><option value="object">object</option><option value="array">array</option>';
+    select.addEventListener('change', () => {
+      const type = select.value;
+      let newVal = null;
+      switch (type) {
+        case 'string': newVal = ''; break;
+        case 'number': newVal = 0; break;
+        case 'boolean': newVal = false; break;
+        case 'object': newVal = {}; break;
+        case 'array': newVal = []; break;
+      }
+      if (newVal !== null) this.#emit(newVal);
     });
-    el.style.cursor = 'pointer';
-    return el;
+    wrapper.appendChild(select);
+    return wrapper;
   }
 
   #renderBool(value) {
@@ -124,10 +164,6 @@ class JsonEditCard {
     const lbl = document.createElement('span');
     lbl.textContent = String(value);
     wrapper.appendChild(lbl);
-    // Update label on change
-    toggle.addEventListener('change', () => {
-      lbl.textContent = String(toggle.checked);
-    });
     return wrapper;
   }
 
@@ -163,9 +199,15 @@ class JsonEditCard {
     const container = document.createElement('div');
     container.className = 'jec-array';
 
+    const inferredType = JsonEditCard.#inferArrayTypes(arr);
+    const typeLabel = inferredType === 'empty' ? 'empty' :
+                      inferredType === 'mixed' ? 'mixed' :
+                      inferredType.endsWith('?') ? `${inferredType.slice(0, -1)}|null` :
+                      inferredType;
+
     const header = document.createElement('div');
     header.className = 'jec-header';
-    header.innerHTML = `<span class="jec-type-tag">Array[${arr.length}]</span>`;
+    header.innerHTML = `<span class="jec-type-tag">Array[${arr.length}]</span><span class="jec-type-tag jec-type-inner">&lt;${typeLabel}&gt;</span>`;
     container.appendChild(header);
 
     const items = document.createElement('div');
@@ -183,8 +225,12 @@ class JsonEditCard {
       const childDest = document.createElement('div');
       childDest.className = 'jec-child';
 
+      // Determine if this array has a dominant non-null type
+      const isTypedArray = !['empty', 'mixed'].includes(inferredType);
+
       const card = new JsonEditCard(item, childDest, {
         deletable: true,
+        inTypedArray: isTypedArray,
         onDelete: () => {
           arr.splice(i, 1);
           this.#emit(arr);
@@ -202,7 +248,7 @@ class JsonEditCard {
 
     container.appendChild(items);
 
-    // Add button
+    // Add button — add a null item by default
     const addBtn = document.createElement('button');
     addBtn.className = 'jec-add-btn';
     addBtn.textContent = '+ add';
@@ -256,9 +302,6 @@ class JsonEditCard {
 
   /** Get the current value */
   getValue() {
-    // For arrays/objects, collect from children
-    const root = this.#root;
-    // Re-read from source
     return this.#json;
   }
 
@@ -272,7 +315,6 @@ class JsonEditCard {
   /** Emit a change event */
   #emit(newValue) {
     this.#json = newValue;
-    // Rebuild to reflect changes
     this.#build();
     for (const cb of this.#onChange) {
       cb(newValue);
