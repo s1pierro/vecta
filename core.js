@@ -2294,25 +2294,42 @@ class DrawArea {
       this._lastCatchDocPos = null;
     });
 
-    // Zoom via pinch (2-finger gesture)
+    // Zoom + Pan via pinch (2-finger gesture)
     overlay.engine.on('pinchStart', (e) => {
       const cx = (e.x1 + e.x2) / 2;
       const cy = (e.y1 + e.y2) / 2;
       const doc = this.#screenToDoc(cx, cy);
       this._pinchDocCenter = doc;
+      this._pinchScreenCenter = { x: cx, y: cy };
     });
     overlay.engine.on('pinchChange', (e) => {
       if (this._pinchDocCenter) {
         this.#zoomAt(this._pinchDocCenter.x, this._pinchDocCenter.y, e.scale / this._pinchLastScale);
+      }
+      // Pan: move view to follow center displacement
+      if (this._pinchScreenCenter) {
+        const cx = (e.x1 + e.x2) / 2;
+        const cy = (e.y1 + e.y2) / 2;
+        const dx = cx - this._pinchScreenCenter.x;
+        const dy = cy - this._pinchScreenCenter.y;
+        if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) {
+          // Convert screen delta to document delta
+          const docDx = dx / this.#zoom;
+          const docDy = dy / this.#zoom;
+          this.#pan(docDx, docDy);
+          this._pinchScreenCenter = { x: cx, y: cy };
+        }
       }
       this._pinchLastScale = e.scale;
     });
     overlay.engine.on('pinchEnd', () => {
       this._pinchDocCenter = null;
       this._pinchLastScale = 1;
+      this._pinchScreenCenter = null;
     });
     this._pinchDocCenter = null;
     this._pinchLastScale = 1;
+    this._pinchScreenCenter = null;
 
     // Handle hit detection via overlay touch (capture phase, before TNT)
     // Only used in 'nodeSelection' mode for dragging selected node handles.
