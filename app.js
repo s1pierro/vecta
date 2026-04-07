@@ -532,50 +532,157 @@ class Application {
       height: 'auto'
     });
 
-    // Tool selector SubWindow
+    // Tool selector SubWindow — main control panel
     const toolContentFn = () => {
       const body = document.createElement('div');
-      body.style.cssText = 'display:flex;flex-direction:column;gap:6px;';
-      const toolButtons = ['draw', 'select', 'pan'];
-      const toolIcons = {
-        draw: '<path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z"/>',
-        select: '<path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/>',
-        pan: '<path d="M5 9l-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20"/>'
-      };
-      const toolLabels = { draw: 'Dessin', select: 'Sélection', pan: 'Pan' };
-      toolButtons.forEach((tool, i) => {
-        const btn = document.createElement('button');
-        btn.className = 'panel-tool-btn' + (i === 0 ? ' active' : '');
-        btn.dataset.tool = tool;
-        btn.style.cssText = `display:flex;align-items:center;gap:8px;padding:6px 12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:rgba(255,255,255,0.7);cursor:pointer;font-size:0.85em;`;
-        btn.innerHTML = `<svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:currentColor">${toolIcons[tool]}</svg><span>${toolLabels[tool]}</span>`;
-        btn.addEventListener('click', () => {
-          this.#corePanel.selectTool(tool);
-        });
-        body.appendChild(btn);
-      });
+      body.style.cssText = 'display:flex;flex-direction:column;gap:0;overflow-y:auto;max-height:70vh;';
 
-      // Select mode toggle button
+      // ── TOOLS section
+      const toolsSection = document.createElement('div');
+      toolsSection.style.cssText = 'padding:8px;';
+      toolsSection.innerHTML = '<div style="color:rgba(255,255,255,0.35);font-size:0.65em;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Outils</div>';
+      const toolsRow = document.createElement('div');
+      toolsRow.style.cssText = 'display:flex;gap:4px;';
+      const toolDefs = [
+        { id: 'toolDraw', tool: 'draw', icon: 'M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z', label: 'Dessin' },
+        { id: 'toolSelect', tool: 'select', icon: 'M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z', label: 'Sélection' },
+        { id: 'toolPan', tool: 'pan', icon: 'M5 9l-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20', label: 'Pan' }
+      ];
+      toolDefs.forEach((td, i) => {
+        const btn = document.createElement('button');
+        btn.id = td.id;
+        btn.className = 'panel-tool-btn' + (i === 0 ? ' active' : '');
+        btn.dataset.tool = td.tool;
+        btn.title = td.label;
+        btn.style.cssText = `flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 4px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:4px;color:rgba(255,255,255,0.5);cursor:pointer;transition:all 0.15s;`;
+        btn.innerHTML = `<svg viewBox="0 0 24 24" style="width:18px;height:18px;fill:currentColor"><path d="${td.icon}"/></svg><span style="font-size:0.6em;">${td.label}</span>`;
+        btn.addEventListener('click', () => this.#corePanel.selectTool(td.tool));
+        toolsRow.appendChild(btn);
+      });
+      toolsSection.appendChild(toolsRow);
+
+      // Select mode toggle
       const selectModeBtn = document.createElement('button');
       selectModeBtn.id = 'selectModeBtn';
-      selectModeBtn.className = 'panel-tool-btn';
-      selectModeBtn.style.cssText = 'display:none;align-items:center;gap:6px;padding:6px 12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:rgba(255,255,255,0.5);cursor:pointer;font-size:0.75em;margin-top:4px;';
+      selectModeBtn.style.cssText = 'display:none;width:100%;margin-top:6px;padding:5px 8px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.12);border-radius:4px;color:rgba(255,255,255,0.4);cursor:pointer;font-size:0.7em;text-align:left;';
       selectModeBtn.title = 'Mode sélection: objets';
-      selectModeBtn.innerHTML = '<svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg><span>Mode nœuds</span>';
+      selectModeBtn.innerHTML = '<svg viewBox="0 0 24 24" style="width:12px;height:12px;fill:currentColor;vertical-align:middle;margin-right:4px;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>Mode nœuds';
       selectModeBtn.addEventListener('click', () => this.#corePanel.toggleSelectMode());
-      body.appendChild(selectModeBtn);
+      toolsSection.appendChild(selectModeBtn);
+      body.appendChild(toolsSection);
+
+      // ── Separator
+      const sep1 = document.createElement('div');
+      sep1.style.cssText = 'height:1px;background:rgba(255,255,255,0.08);';
+      body.appendChild(sep1);
+
+      // ── PROPERTIES section (object/path properties)
+      const propsSection = document.createElement('div');
+      propsSection.id = 'toolPropsSection';
+      propsSection.style.cssText = 'padding:8px;display:none;';
+      propsSection.innerHTML = '<div style="color:rgba(255,255,255,0.35);font-size:0.65em;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Propriétés</div>';
+      const propsGrid = document.createElement('div');
+      propsGrid.id = 'toolPropsGrid';
+      propsGrid.style.cssText = 'display:flex;flex-direction:column;gap:4px;';
+      propsGrid.innerHTML =
+        '<div style="display:flex;justify-content:space-between;font-size:0.7em;"><span style="color:rgba(255,255,255,0.4);">Couleur</span><span id="tpColor" style="color:#4fc3f7;">-</span></div>' +
+        '<div style="display:flex;justify-content:space-between;font-size:0.7em;"><span style="color:rgba(255,255,255,0.4);">Taille</span><span id="tpSize" style="color:#4fc3f7;">-</span></div>' +
+        '<div style="display:flex;justify-content:space-between;font-size:0.7em;"><span style="color:rgba(255,255,255,0.4);">Points</span><span id="tpPoints" style="color:#4fc3f7;">-</span></div>';
+      propsSection.appendChild(propsGrid);
+
+      // Tolerance control
+      const tolRow = document.createElement('div');
+      tolRow.style.cssText = 'margin-top:6px;display:flex;align-items:center;gap:4px;';
+      tolRow.innerHTML =
+        '<span style="color:rgba(255,255,255,0.4);font-size:0.65em;">Tol.</span>' +
+        '<input type="range" id="tpTolSlider" min="1" max="50" step="1" value="5" style="flex:1;height:3px;accent-color:#4fc3f7;">' +
+        '<span id="tpTol" style="color:rgba(255,255,255,0.5);font-size:0.65em;min-width:24px;">5px</span>' +
+        '<button id="tpSimplify" style="padding:2px 6px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:3px;color:rgba(255,255,255,0.5);cursor:pointer;font-size:0.6em;" title="Simplifier">≈</button>';
+      propsSection.appendChild(tolRow);
+      body.appendChild(propsSection);
+
+      // ── Separator
+      const sep2 = document.createElement('div');
+      sep2.style.cssText = 'height:1px;background:rgba(255,255,255,0.08);';
+      body.appendChild(sep2);
+
+      // ── NODE EDIT section
+      const nodeSection = document.createElement('div');
+      nodeSection.id = 'toolNodeSection';
+      nodeSection.style.cssText = 'padding:8px;display:none;';
+      nodeSection.innerHTML = '<div style="color:rgba(255,255,255,0.35);font-size:0.65em;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Nœuds</div>';
+      const nodeInfo = document.createElement('div');
+      nodeInfo.style.cssText = 'font-size:0.65em;color:rgba(255,255,255,0.5);margin-bottom:4px;';
+      nodeInfo.innerHTML = '<span id="tnCount">0</span> nœuds — indices <span id="tnIndices">-</span>';
+      nodeSection.appendChild(nodeInfo);
+
+      // Node type buttons
+      const typeRow = document.createElement('div');
+      typeRow.style.cssText = 'display:flex;gap:3px;margin-bottom:4px;';
+      const typeDefs = [
+        { id: 'tnCorner', type: 'corner', icon: 'M4 4l6 16 4-8 8-4z', label: 'Coin' },
+        { id: 'tnSmooth', type: 'smooth', icon: 'M3 17c1-2 3-4 5-4s3 3 5 3 4-4 8-4v4c-2 0-4 3-7 3s-3-3-5-3-4 3-6 4V17z', label: 'Lisse' },
+        { id: 'tnSymmetric', type: 'symmetric', icon: 'M3 17c2-3 4-5 6-5s4 4 5 4 3-4 5-4v0c-2 0-4 4-5 4s-3-4-5-4-4 3-6 5z', label: 'Sym.' },
+        { id: 'tnAuto', type: 'auto', icon: 'M12 2l3 7h7l-5.5 4 2 7L12 16l-6.5 4 2-7L2 9h7z', label: 'Auto' }
+      ];
+      typeDefs.forEach(td => {
+        const btn = document.createElement('button');
+        btn.id = td.id;
+        btn.className = 'node-type-btn';
+        btn.dataset.nodeType = td.type;
+        btn.title = td.label;
+        btn.style.cssText = 'flex:1;display:flex;flex-direction:column;align-items:center;gap:1px;padding:4px 2px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:3px;color:rgba(255,255,255,0.4);cursor:pointer;';
+        btn.innerHTML = `<svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:currentColor"><path d="${td.icon}"/></svg><span style="font-size:0.55em;">${td.label}</span>`;
+        btn.addEventListener('click', () => this.#corePanel.selectNodeType(td.type));
+        typeRow.appendChild(btn);
+      });
+      nodeSection.appendChild(typeRow);
+
+      // Action buttons
+      const actionRow = document.createElement('div');
+      actionRow.style.cssText = 'display:flex;gap:3px;';
+      const actionDefs = [
+        { id: 'tnDelete', icon: 'M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16', label: 'Supprimer', action: 'deleteNodes' },
+        { id: 'tnInsert', icon: 'M12 5v14M5 12h14', label: 'Insérer', action: 'insertNodes' }
+      ];
+      actionDefs.forEach(ad => {
+        const btn = document.createElement('button');
+        btn.id = ad.id;
+        btn.style.cssText = 'flex:1;display:flex;align-items:center;justify-content:center;gap:4px;padding:5px 4px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:3px;color:rgba(255,255,255,0.5);cursor:pointer;font-size:0.65em;';
+        btn.innerHTML = `<svg viewBox="0 0 24 24" style="width:12px;height:12px;fill:currentColor"><path d="${ad.icon}"/></svg>${ad.label}`;
+        btn.addEventListener('click', () => this.#corePanel[ad.action]());
+        actionRow.appendChild(btn);
+      });
+      nodeSection.appendChild(actionRow);
+      body.appendChild(nodeSection);
 
       return body;
     };
     this.#subWindowManager.addWindow('toolSelector', {
       id: 'toolSelector',
-      title: 'Outils',
+      title: 'Contrôle',
       content: toolContentFn,
       left: '50vw',
       top: '10vh',
-      width: '180px',
+      width: '200px',
       height: 'auto'
     });
+
+    // Wire toolSelector sub-window controls
+    setTimeout(() => {
+      const tolSlider = document.getElementById('tpTolSlider');
+      const tolLabel = document.getElementById('tpTol');
+      if (tolSlider && tolLabel) {
+        tolSlider.addEventListener('input', (e) => { tolLabel.textContent = e.target.value + 'px'; });
+      }
+      const simplifyBtn = document.getElementById('tpSimplify');
+      if (simplifyBtn) {
+        simplifyBtn.addEventListener('click', () => {
+          const tol = parseInt(document.getElementById('tpTolSlider')?.value || '5', 10);
+          this.#corePanel.simplifySelectedPath(tol);
+        });
+      }
+    }, 0);
 
     // Toggle raw states with double-tap on statusBar
     statusBar.addEventListener('dblclick', () => {

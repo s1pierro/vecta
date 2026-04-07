@@ -1129,6 +1129,19 @@ class CorePanel {
       section.classList.add('visible');
     }
     this.syncNodeSelection();
+
+    // Update toolSelector properties section
+    const propsSection = document.getElementById('toolPropsSection');
+    if (propsSection) propsSection.style.display = path ? '' : 'none';
+    if (path) {
+      const tpColor = document.getElementById('tpColor');
+      const tpSize = document.getElementById('tpSize');
+      const tpPoints = document.getElementById('tpPoints');
+      if (tpColor) tpColor.textContent = path.color;
+      if (tpSize) tpSize.textContent = path.size + 'px';
+      if (tpPoints) tpPoints.textContent = path.points ? path.points.length : 0;
+    }
+
     if (!path) return;
 
     const selColor = document.getElementById('selColor');
@@ -1147,21 +1160,42 @@ class CorePanel {
   }
 
   syncNodeSelection() {
-    const section = document.getElementById('panelNode');
     const nodes = this.#selectionManager.selectedNodes;
-    if (!nodes || nodes.length === 0) {
-      section.style.display = 'none';
-      return;
+
+    // Update legacy panelNode
+    const section = document.getElementById('panelNode');
+    if (section) {
+      if (!nodes || nodes.length === 0) {
+        section.style.display = 'none';
+      } else {
+        section.style.display = 'flex';
+        const count = document.getElementById('nodeCount');
+        const indices = document.getElementById('nodeIndices');
+        if (count) count.textContent = nodes.length;
+        if (indices) indices.textContent = nodes.sort((a, b) => a - b).join(', ');
+      }
     }
-    section.style.display = 'flex';
-    const count = document.getElementById('nodeCount');
-    const indices = document.getElementById('nodeIndices');
-    if (count) count.textContent = nodes.length;
-    if (indices) indices.textContent = nodes.sort((a, b) => a - b).join(', ');
+
+    // Update toolSelector node section
+    const nodeSection = document.getElementById('toolNodeSection');
+    if (nodeSection) {
+      nodeSection.style.display = nodes && nodes.length > 0 ? '' : 'none';
+      if (nodes && nodes.length > 0) {
+        const tnCount = document.getElementById('tnCount');
+        const tnIndices = document.getElementById('tnIndices');
+        if (tnCount) tnCount.textContent = nodes.length;
+        if (tnIndices) tnIndices.textContent = nodes.sort((a, b) => a - b).join(', ');
+      }
+    }
 
     // Sync node type selector
     this.#syncNodeTypeSelector();
   }
+
+  selectNodeType(type) { this.#stateMachine.setNodeTypeForSelected(type); }
+  deleteNodes() { this.#stateMachine.deleteSelectedNodes(); }
+  insertNodes() { this.#stateMachine.insertNodesBetweenSelected(); }
+  simplifySelectedPath(tol) { this.#stateMachine.simplifySelectedPath(tol); }
 
   #updateSubWindowsList() {
     const list = document.getElementById('subWindowsList');
@@ -1205,12 +1239,20 @@ class CorePanel {
       if (count > maxCount) { maxCount = count; dominant = type; }
     }
 
-    // Update button states
+    // Update legacy selector
     const selector = document.getElementById('nodeTypeSelector');
-    if (!selector) return;
-    selector.querySelectorAll('.node-type-btn').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.nodeType === dominant);
-    });
+    if (selector) {
+      selector.querySelectorAll('.node-type-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.nodeType === dominant);
+      });
+    }
+
+    // Update toolSelector node type buttons
+    const typeMap = { corner: 'tnCorner', smooth: 'tnSmooth', symmetric: 'tnSymmetric', auto: 'tnAuto' };
+    for (const [type, id] of Object.entries(typeMap)) {
+      const btn = document.getElementById(id);
+      if (btn) btn.classList.toggle('active', type === dominant);
+    }
   }
 }
 
