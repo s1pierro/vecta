@@ -551,6 +551,10 @@ class StateMachine {
   #maxHistory = 50;
   #selectionManager = null;
 
+  // State management
+  #stateRegistry = new Map();   // name -> State
+  #activeStates = new Set();    // names of currently active states
+
   constructor() {
     this.#state = {
       mode: 'drawingTool',
@@ -566,6 +570,194 @@ class StateMachine {
     };
     this.#listeners = {};
     this.#saveState();
+    this.#registerDefaultStates();
+  }
+
+  /**
+   * Register built-in application states.
+   */
+  #registerDefaultStates() {
+    const ctx = () => this.state;
+
+    // ── Mode states ──
+    this.registerState(new State({
+      name: 'drawingTool',
+      type: 'mode',
+      family: 'appMode',
+      exclusiveFields: ['mainMode'],
+      priority: 0,
+      onEnter: () => this.#emit('modeChange', 'drawingTool'),
+      tags: ['mode', 'drawing']
+    }));
+
+    this.registerState(new State({
+      name: 'selection',
+      type: 'mode',
+      family: 'appMode',
+      exclusiveFields: ['mainMode'],
+      priority: 0,
+      onEnter: () => this.#emit('modeChange', 'selection'),
+      tags: ['mode', 'editing']
+    }));
+
+    // ── Tool states ──
+    this.registerState(new State({
+      name: 'draw',
+      type: 'tool',
+      family: 'currentTool',
+      exclusiveFields: ['activeTool'],
+      priority: 0,
+      activationCondition: (c) => c.mode === 'drawingTool',
+      onEnter: () => this.#emit('toolChange', 'draw'),
+      tags: ['tool', 'drawing']
+    }));
+
+    this.registerState(new State({
+      name: 'select',
+      type: 'tool',
+      family: 'currentTool',
+      exclusiveFields: ['activeTool'],
+      priority: 0,
+      onEnter: () => this.#emit('toolChange', 'select'),
+      tags: ['tool', 'editing']
+    }));
+
+    this.registerState(new State({
+      name: 'pan',
+      type: 'tool',
+      family: 'currentTool',
+      exclusiveFields: ['activeTool'],
+      priority: 0,
+      activationCondition: (c) => c.mode === 'drawingTool',
+      onEnter: () => this.#emit('toolChange', 'pan'),
+      tags: ['tool', 'navigation']
+    }));
+
+    // Activate defaults: drawingTool mode + draw tool
+    this.activateState('drawingTool', ctx());
+    this.activateState('draw', ctx());
+  }
+
+  // ── State registry API ──
+
+  /**
+   * Register a State definition.
+   * @param {State} state
+   */
+  registerState(state) {
+    this.#stateRegistry.set(state.name, state);
+  }
+
+  /**
+   * Get a registered State by name.
+   * @param {string} name
+   * @returns {State|null}
+   */
+  getState(name) {
+    return this.#stateRegistry.get(name) || null;
+  }
+
+  /**
+   * Get all registered state names.
+   */
+  getRegisteredStateNames() {
+    return [...this.#stateRegistry.keys()];
+  }
+
+  /**
+   * Get currently active state names.
+   */
+  getActiveStateNames() {
+    return [...this.#activeStates];
+  }
+
+  /**
+   * Check if a state is currently active.
+   */
+  isActive(name) {
+    return this.#activeStates.has(name);
+  }
+
+  /**
+   * Try to activate a state. Enforces exclusivity and conditions.
+   * @param {string} name
+   * @param {object} ctx — context snapshot
+   * @returns {boolean} — true if activated
+   */
+  activateState(name, ctx = this.state) {
+    const state = this.#stateRegistry.get(name);
+    if (!state) {
+      console.warn(`State "${name}" not registered`);
+      return false;
+    }
+
+    // Check activation condition
+    if (!state.canActivate(ctx)) {
+      return false;
+    }
+
+    // Check exclusivity conflicts
+    const conflicts = [];
+    for (const activeName of this.#activeStates) {
+      const activeState = this.#stateRegistry.get(activeName);
+      if (!activeState) continue;
+      const fields = state.getExclusiveConflicts(activeState);
+      if (fields.length > 0) {
+        conflicts.push({ name: activeName, fields });
+      }
+    }
+
+    // Resolve conflicts: deactivate lower-priority states
+    for (const conflict of conflicts) {
+      const other = this.#stateRegistry.get(conflict.name);
+      if (state.priority >= other.priority) {
+        this.deactivateState(conflict.name, ctx);
+      } else {
+        return false; // can't override higher priority
+      }
+    }
+
+    // Already active?
+    if (this.#activeStates.has(name)) return true;
+
+    // Enter new state
+    this.#activeStates.add(name);
+    state.enter(ctx);
+    return true;
+  }
+
+  /**
+   * Deactivate a state.
+   * @param {string} name
+   * @param {object} ctx
+   * @returns {boolean}
+   */
+  deactivateState(name, ctx = this.state) {
+    if (!this.#activeStates.has(name)) return true;
+    const state = this.#stateRegistry.get(name);
+    if (state) state.exit(ctx);
+    this.#activeStates.delete(name);
+    return true;
+  }
+
+  /**
+   * Check exclusivity conflicts without activating.
+   * @param {string} name
+   * @returns {Array<{name: string, fields: string[]}>}
+   */
+  getConflicts(name) {
+    const state = this.#stateRegistry.get(name);
+    if (!state) return [];
+    const conflicts = [];
+    for (const activeName of this.#activeStates) {
+      const activeState = this.#stateRegistry.get(activeName);
+      if (!activeState) continue;
+      const fields = state.getExclusiveConflicts(activeState);
+      if (fields.length > 0) {
+        conflicts.push({ name: activeName, fields });
+      }
+    }
+    return conflicts;
   }
 
   /**
@@ -609,10 +801,16 @@ class StateMachine {
   }
 
   get mode() { return this.#state.mode; }
-  set mode(v) { this.#state.mode = v; this.#emit('modeChange', v); }
+  set mode(v) {
+    this.#state.mode = v;
+    this.activateState(v, this.state);
+  }
 
   get currentTool() { return this.#state.currentTool; }
-  set currentTool(v) { this.#state.currentTool = v; this.#emit('toolChange', v); }
+  set currentTool(v) {
+    this.#state.currentTool = v;
+    this.activateState(v, this.state);
+  }
 
   get currentColor() { return this.#state.currentColor; }
   set currentColor(v) { this.#state.currentColor = v; this.#emit('colorChange', v); }
@@ -946,8 +1144,7 @@ class StateMachine {
         this.#emit('selectedPathChange', null);
       }
     }
-    this.#state.mode = newMode;
-    this.#emit('modeChange', newMode);
+    this.mode = newMode; // triggers activateState
   }
 }
 
