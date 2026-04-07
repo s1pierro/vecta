@@ -25,6 +25,7 @@ class JsonEditCard {
    * @param {string} [options.label] — optional label for this card
    * @param {Function} [options.onDelete] — callback when delete clicked
    * @param {boolean} [options.inTypedArray=false] — true when inside a typed array
+   * @param {number} [options.depth=0] — nesting depth for styling
    */
   constructor(json, domDest, options = {}) {
     this.#json = json;
@@ -34,7 +35,8 @@ class JsonEditCard {
       deletable: options.deletable === true,
       label: options.label || '',
       onDelete: options.onDelete || null,
-      inTypedArray: options.inTypedArray === true
+      inTypedArray: options.inTypedArray === true,
+      depth: typeof options.depth === 'number' ? options.depth : 0
     };
     this.#build();
   }
@@ -44,7 +46,17 @@ class JsonEditCard {
     this.#domDest.innerHTML = '';
     this.#children = [];
     this.#root = document.createElement('div');
+
+    // Root card: transparent bg + light padding
     this.#root.className = 'json-edit-card';
+
+    // Direct children (depth 0): orange bg + black text
+    if (this._options.depth === 0) {
+      this.#root.classList.add('jec-root-level');
+    } else {
+      // Deeper levels: moderate border
+      this.#root.classList.add('jec-nested-level');
+    }
 
     // Label row (if label provided or deletable)
     if (this._options.label || this._options.deletable) {
@@ -226,11 +238,13 @@ class JsonEditCard {
       childDest.className = 'jec-child';
 
       // Determine if this array has a dominant non-null type
-      const isTypedArray = !['empty', 'mixed'].includes(inferredType);
+      // Exception: if the array only contains nulls (empty→first add), allow type selection
+      const isTypedArray = !['empty', 'mixed', 'null'].includes(inferredType);
 
       const card = new JsonEditCard(item, childDest, {
         deletable: true,
         inTypedArray: isTypedArray,
+        depth: this._options.depth + 1,
         onDelete: () => {
           arr.splice(i, 1);
           this.#emit(arr);
@@ -285,7 +299,7 @@ class JsonEditCard {
       const childDest = document.createElement('div');
       childDest.className = 'jec-child';
 
-      const card = new JsonEditCard(obj[key], childDest, { label: '' });
+      const card = new JsonEditCard(obj[key], childDest, { label: '', depth: this._options.depth + 1 });
       card.on('change', () => {
         obj[key] = card.getValue();
         this.#emit(obj);
@@ -297,6 +311,18 @@ class JsonEditCard {
     }
 
     container.appendChild(keys);
+
+    // Add button for objects (even empty ones)
+    const addBtn = document.createElement('button');
+    addBtn.className = 'jec-add-btn';
+    addBtn.textContent = '+ key';
+    addBtn.addEventListener('click', () => {
+      const key = `key${Object.keys(obj).length}`;
+      obj[key] = null;
+      this.#emit(obj);
+    });
+    container.appendChild(addBtn);
+
     return container;
   }
 
