@@ -524,9 +524,10 @@ class CorePanel {
     }
     this.syncNodeSelection();
     if (!path) return;
-    const selColor = this.#el.querySelector('#selColor');
-    const selSize = this.#el.querySelector('#selSize');
-    const selPoints = this.#el.querySelector('#selPoints');
+
+    const selColor = document.getElementById('selColor');
+    const selSize = document.getElementById('selSize');
+    const selPoints = document.getElementById('selPoints');
     if (selColor) selColor.textContent = path.color;
     if (selSize) selSize.textContent = path.size + 'px';
     if (selPoints) selPoints.textContent = path.points ? path.points.length : 0;
@@ -540,15 +541,15 @@ class CorePanel {
   }
 
   syncNodeSelection() {
-    const section = this.#el.querySelector('#panelNode');
+    const section = document.getElementById('panelNode');
     const nodes = this.#stateMachine.selectedNodes;
     if (!nodes || nodes.length === 0) {
       section.style.display = 'none';
       return;
     }
     section.style.display = 'flex';
-    const count = this.#el.querySelector('#nodeCount');
-    const indices = this.#el.querySelector('#nodeIndices');
+    const count = document.getElementById('nodeCount');
+    const indices = document.getElementById('nodeIndices');
     if (count) count.textContent = nodes.length;
     if (indices) indices.textContent = nodes.sort((a, b) => a - b).join(', ');
   }
