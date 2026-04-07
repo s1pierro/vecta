@@ -395,6 +395,21 @@
       padding: 8px;
       position: relative;
     }
+    /* Global: all key names and indices in #555 */
+    .jec-key-name {
+      color: #555;
+      font-size: 0.75em;
+      font-family: 'SF Mono', monospace;
+      min-width: 100px;
+      padding-top: 2px;
+    }
+    .jec-idx {
+      color: #555;
+      font-size: 0.7em;
+      font-family: 'SF Mono', monospace;
+      min-width: 20px;
+      padding-top: 2px;
+    }
     .jec-root-level .jec-label {
       color: rgba(0,0,0,0.6);
       font-weight: bold;
@@ -423,12 +438,6 @@
       background: transparent;
       border: 1px solid #000;
     }
-    .jec-nested-level .jec-key-name {
-      color: #555;
-    }
-    .jec-nested-level .jec-idx {
-      color: #555;
-    }
     .jec-nested-level .jec-type-tag {
       color: #000;
       background: rgba(0,0,0,0.05);
@@ -437,9 +446,7 @@
     .jec-nested-level .jec-label {
       color: #555;
     }
-    .jec-nested-level .jec-null {
-      color: #555;
-    }
+    .jec-nested-level .jec-null,
     .jec-nested-level .jec-null-label {
       color: #555;
     }
