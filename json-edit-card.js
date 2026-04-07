@@ -225,6 +225,17 @@ class JsonEditCard {
     const items = document.createElement('div');
     items.className = 'jec-items';
 
+    // When typed, coerce nulls to default value of that type (without emitting to avoid infinite loop)
+    const isTypedArray = !['empty', 'mixed', 'null'].includes(inferredType);
+    const baseType = isTypedArray ? inferredType.replace(/\?$/, '') : null;
+    if (isTypedArray) {
+      for (let i = 0; i < arr.length; i++) {
+        if (arr[i] === null || arr[i] === undefined) {
+          arr[i] = JsonEditCard.#defaultValueForType(baseType);
+        }
+      }
+    }
+
     arr.forEach((item, i) => {
       const row = document.createElement('div');
       row.className = 'jec-row';
@@ -236,10 +247,6 @@ class JsonEditCard {
 
       const childDest = document.createElement('div');
       childDest.className = 'jec-child';
-
-      // Determine if this array has a dominant non-null type
-      // Exception: if the array only contains nulls (empty→first add), allow type selection
-      const isTypedArray = !['empty', 'mixed', 'null'].includes(inferredType);
 
       const card = new JsonEditCard(item, childDest, {
         deletable: true,
@@ -262,17 +269,30 @@ class JsonEditCard {
 
     container.appendChild(items);
 
-    // Add button — add a null item by default
+    // Add button — create element of the dominant type
     const addBtn = document.createElement('button');
     addBtn.className = 'jec-add-btn';
     addBtn.textContent = '+ add';
     addBtn.addEventListener('click', () => {
-      arr.push(null);
+      const newVal = isTypedArray ? JsonEditCard.#defaultValueForType(baseType) : null;
+      arr.push(newVal);
       this.#emit(arr);
     });
     container.appendChild(addBtn);
 
     return container;
+  }
+
+  /** Get default value for a given type name */
+  static #defaultValueForType(type) {
+    switch (type) {
+      case 'string': return '';
+      case 'number': return 0;
+      case 'boolean': return false;
+      case 'object': return {};
+      case 'array': return [];
+      default: return null;
+    }
   }
 
   #renderObject(obj) {
