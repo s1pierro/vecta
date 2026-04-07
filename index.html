@@ -387,7 +387,20 @@
       padding: 4px;
       margin: 2px 0;
     }
-    /* Direct children (depth 0): orange bg + black text */
+    /* Global: key names and indices base styles */
+    .jec-key-name {
+      font-size: 0.75em;
+      font-family: 'SF Mono', monospace;
+      min-width: 100px;
+      padding-top: 2px;
+    }
+    .jec-idx {
+      font-size: 0.7em;
+      font-family: 'SF Mono', monospace;
+      min-width: 20px;
+      padding-top: 2px;
+    }
+    /* Direct children (depth 0): orange bg + all black text */
     .jec-root-level {
       background: #ff9800;
       color: #000000;
@@ -395,32 +408,36 @@
       padding: 8px;
       position: relative;
     }
-    /* Global: all key names and indices in #555 */
-    .jec-key-name {
-      color: #555;
-      font-size: 0.75em;
-      font-family: 'SF Mono', monospace;
-      min-width: 100px;
-      padding-top: 2px;
+    /* Force ALL descendants of root-level to #000 */
+    .jec-root-level .jec-key-name,
+    .jec-root-level .jec-idx,
+    .jec-root-level .jec-label,
+    .jec-root-level .jec-type-tag,
+    .jec-root-level .jec-type-inner,
+    .jec-root-level .jec-null,
+    .jec-root-level .jec-null-label,
+    .jec-root-level .jec-add-btn,
+    .jec-root-level .jec-del-btn,
+    .jec-root-level input,
+    .jec-root-level .jec-type-select {
+      color: #000;
     }
-    .jec-idx {
-      color: #555;
-      font-size: 0.7em;
-      font-family: 'SF Mono', monospace;
-      min-width: 20px;
-      padding-top: 2px;
+    .jec-root-level input::placeholder {
+      color: #000;
     }
-    .jec-root-level .jec-label {
-      color: rgba(0,0,0,0.6);
-      font-weight: bold;
+    .jec-root-level .jec-add-btn {
+      border-color: rgba(0,0,0,0.3);
+      background: rgba(0,0,0,0.06);
     }
-    .jec-root-level .jec-type-tag {
-      color: rgba(0,0,0,0.5);
+    .jec-root-level .jec-del-btn {
       background: rgba(0,0,0,0.1);
     }
-    .jec-root-level .jec-type-inner {
-      color: rgba(0,0,0,0.4);
-      background: rgba(0,0,0,0.08);
+    .jec-root-level .jec-type-select {
+      border-color: rgba(0,0,0,0.3);
+    }
+    .jec-root-level .jec-type-select option {
+      color: #000;
+      background: #fff;
     }
     /* Sticky names for root-level children */
     .jec-root-level > .jec-items .jec-idx,
