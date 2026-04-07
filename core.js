@@ -459,6 +459,9 @@ class DrawArea {
   #zoom = 1;
   #DOC_W = 2970;
   #DOC_H = 2100;
+  _handleDragHandle = null;
+  _handleDragOrigPoints = null;
+  _handleDragOrigBBox = null;
 
   constructor(stateMachine) {
     this.#stateMachine = stateMachine;
@@ -626,7 +629,10 @@ class DrawArea {
   _redrawSelection() {
     this.#svgUI.innerHTML = '';
     const selectedPath = this.#stateMachine.selectedPath;
-    if (!selectedPath || !selectedPath.points || selectedPath.points.length < 2) return;
+    if (!selectedPath || !selectedPath.points || selectedPath.points.length < 2) {
+      this._clearHandleDrag();
+      return;
+    }
 
     const bbox = this.#computeBBox(selectedPath.points);
     const padding = 4;
@@ -646,31 +652,213 @@ class DrawArea {
     rect.setAttribute('pointer-events', 'none');
     this.#svgUI.appendChild(rect);
 
-    // Poignées aux coins et milieux
-    const handleSize = 8;
-    const corners = [
-      { x: (tl.x + br.x) / 2, y: tl.y },  // top
-      { x: (tl.x + br.x) / 2, y: br.y },  // bottom
-      { x: tl.x, y: (tl.y + br.y) / 2 },  // left
-      { x: br.x, y: (tl.y + br.y) / 2 },  // right
-      { x: tl.x, y: tl.y },               // top-left
-      { x: br.x, y: tl.y },               // top-right
-      { x: tl.x, y: br.y },               // bottom-left
-      { x: br.x, y: br.y },               // bottom-right
+    const handleSize = 10;
+    const handles = [
+      { name: 'n',  cx: (tl.x + br.x) / 2, cy: tl.y, cursor: 'ns-resize' },
+      { name: 's',  cx: (tl.x + br.x) / 2, cy: br.y, cursor: 'ns-resize' },
+      { name: 'w',  cx: tl.x, cy: (tl.y + br.y) / 2, cursor: 'ew-resize' },
+      { name: 'e',  cx: br.x, cy: (tl.y + br.y) / 2, cursor: 'ew-resize' },
+      { name: 'nw', cx: tl.x, cy: tl.y, cursor: 'nwse-resize' },
+      { name: 'ne', cx: br.x, cy: tl.y, cursor: 'nesw-resize' },
+      { name: 'sw', cx: tl.x, cy: br.y, cursor: 'nesw-resize' },
+      { name: 'se', cx: br.x, cy: br.y, cursor: 'nwse-resize' },
     ];
-    corners.forEach(c => {
-      const h = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-      h.setAttribute('x', c.x - handleSize / 2);
-      h.setAttribute('y', c.y - handleSize / 2);
-      h.setAttribute('width', handleSize);
-      h.setAttribute('height', handleSize);
-      h.setAttribute('rx', '2');
-      h.setAttribute('fill', '#fff');
-      h.setAttribute('stroke', '#4fc3f7');
-      h.setAttribute('stroke-width', '2');
-      h.setAttribute('pointer-events', 'none');
-      this.#svgUI.appendChild(h);
+
+    handles.forEach(h => {
+      const el = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      el.setAttribute('x', h.cx - handleSize / 2);
+      el.setAttribute('y', h.cy - handleSize / 2);
+      el.setAttribute('width', handleSize);
+      el.setAttribute('height', handleSize);
+      el.setAttribute('rx', '2');
+      el.setAttribute('fill', '#fff');
+      el.setAttribute('stroke', '#4fc3f7');
+      el.setAttribute('stroke-width', '2');
+      el.setAttribute('pointer-events', 'none');
+      this.#svgUI.appendChild(el);
     });
+
+    // Poignées de nœuds — un petit cercle par point du tracé
+    const nodeRadius = 5;
+    const points = selectedPath.points;
+    const nodeHandles = [];
+    points.forEach((p, i) => {
+      const sp = this.#docToScreen(p.x, p.y);
+      const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      c.setAttribute('cx', sp.x);
+      c.setAttribute('cy', sp.y);
+      c.setAttribute('r', nodeRadius);
+      c.setAttribute('fill', '#4fc3f7');
+      c.setAttribute('stroke', '#fff');
+      c.setAttribute('stroke-width', '2');
+      c.setAttribute('pointer-events', 'none');
+      this.#svgUI.appendChild(c);
+      nodeHandles.push({ name: `node:${i}`, x: sp.x, y: sp.y });
+    });
+
+    // Stocker tous les centres pour hit detection (bbox + nœuds)
+    const allHandles = handles.map(h => ({ name: h.name, x: h.cx, y: h.cy }));
+    this._handleCenters = allHandles.concat(nodeHandles);
+    this._handleHitRadius = Math.max(handleSize, nodeRadius * 2.5);
+  }
+
+  /**
+   * Débute la déformation via une poignée.
+   * Appelé quand l'overlay détecte un touch sur une poignée.
+   */
+  _startHandleDrag(handleName, screenX, screenY) {
+    const doc = this.#screenToDoc(screenX, screenY);
+
+    const path = this.#stateMachine.selectedPath;
+    if (!path) return;
+
+    this._handleDragHandle = handleName;
+    this._handleDragOrigPoints = path.points.map(p => ({ x: p.x, y: p.y }));
+    this._handleDragOrigBBox = this.#computeBBox(path.points);
+    this._handleDragStartDoc = doc;
+
+    this._handleDragMove = (ev) => this._onHandleDragMove(ev);
+    this._handleDragEnd = (ev) => this._onHandleDragEnd(ev);
+    this.#touchOverlay.addEventListener('touchmove', this._handleDragMove, { passive: false });
+    this.#touchOverlay.addEventListener('touchend', this._handleDragEnd);
+    this.#touchOverlay.addEventListener('touchcancel', this._handleDragEnd);
+  }
+
+  _onHandleDragMove(e) {
+    if (!this._handleDragHandle || !this._handleDragOrigPoints) return;
+    const touch = e.changedTouches[0];
+    const containerRect = this.#el.getBoundingClientRect();
+    const screenX = touch.clientX - containerRect.left;
+    const screenY = touch.clientY - containerRect.top;
+    const doc = this.#screenToDoc(screenX, screenY);
+
+    this._deformPath(doc);
+    this._redraw();
+    e.preventDefault();
+  }
+
+  _onHandleDragEnd() {
+    this.#touchOverlay.removeEventListener('touchmove', this._handleDragMove);
+    this.#touchOverlay.removeEventListener('touchend', this._handleDragEnd);
+    this.#touchOverlay.removeEventListener('touchcancel', this._handleDragEnd);
+    this._handleDragOrigBBox = null;
+    this._handleDragOrigPoints = null;
+    this._handleDragStartDoc = null;
+    this._handleDragHandle = null;
+  }
+
+  _clearHandleDrag() {
+    if (this._handleDragHandle) {
+      this.#touchOverlay.removeEventListener('touchmove', this._handleDragMove);
+      this.#touchOverlay.removeEventListener('touchend', this._handleDragEnd);
+      this.#touchOverlay.removeEventListener('touchcancel', this._handleDragEnd);
+      this._handleDragHandle = null;
+      this._handleDragOrigPoints = null;
+      this._handleDragOrigBBox = null;
+    }
+  }
+
+  /**
+   * Déforme le tracé sélectionné selon le déplacement de la poignée.
+   */
+  _deformPath(newDocPos) {
+    const path = this.#stateMachine.selectedPath;
+    if (!path) return;
+
+    // Cas spécial : déplacement d'un nœud individuel
+    if (this._handleDragHandle.startsWith('node:')) {
+      const nodeIndex = parseInt(this._handleDragHandle.split(':')[1], 10);
+      if (isNaN(nodeIndex) || nodeIndex >= path.points.length) return;
+      path.points[nodeIndex] = { x: newDocPos.x, y: newDocPos.y };
+      this.#stateMachine.updateSelectedPath({ points: path.points });
+      return;
+    }
+
+    const orig = this._handleDragOrigPoints;
+    const bbox = this._handleDragOrigBBox;
+    const handle = this._handleDragHandle;
+
+    const bw = bbox.maxX - bbox.minX || 1;
+    const bh = bbox.maxY - bbox.minY || 1;
+
+    const dx = newDocPos.x - this._handleDragStartDoc.x;
+    const dy = newDocPos.y - this._handleDragStartDoc.y;
+
+    let scaleX = 1, scaleY = 1, doX = false, doY = false;
+    let anchorX = 0, anchorY = 0;
+
+    switch (handle) {
+      case 'nw': { // scale from bottom-right
+        const newW = bw - dx;
+        const newH = bh - dy;
+        scaleX = Math.max(0.1, Math.min(10, newW / bw));
+        scaleY = Math.max(0.1, Math.min(10, newH / bh));
+        anchorX = bbox.maxX; anchorY = bbox.maxY;
+        doX = true; doY = true;
+        break;
+      }
+      case 'ne': { // scale from bottom-left
+        const newW = bw + dx;
+        const newH = bh - dy;
+        scaleX = Math.max(0.1, Math.min(10, newW / bw));
+        scaleY = Math.max(0.1, Math.min(10, newH / bh));
+        anchorX = bbox.minX; anchorY = bbox.maxY;
+        doX = true; doY = true;
+        break;
+      }
+      case 'sw': { // scale from top-right
+        const newW = bw - dx;
+        const newH = bh + dy;
+        scaleX = Math.max(0.1, Math.min(10, newW / bw));
+        scaleY = Math.max(0.1, Math.min(10, newH / bh));
+        anchorX = bbox.maxX; anchorY = bbox.minY;
+        doX = true; doY = true;
+        break;
+      }
+      case 'se': { // scale from top-left
+        const newW = bw + dx;
+        const newH = bh + dy;
+        scaleX = Math.max(0.1, Math.min(10, newW / bw));
+        scaleY = Math.max(0.1, Math.min(10, newH / bh));
+        anchorX = bbox.minX; anchorY = bbox.minY;
+        doX = true; doY = true;
+        break;
+      }
+      case 'n': {
+        const newH = bh - dy;
+        scaleY = Math.max(0.1, Math.min(10, newH / bh));
+        anchorY = bbox.maxY;
+        doY = true;
+        break;
+      }
+      case 's': {
+        const newH = bh + dy;
+        scaleY = Math.max(0.1, Math.min(10, newH / bh));
+        anchorY = bbox.minY;
+        doY = true;
+        break;
+      }
+      case 'w': {
+        const newW = bw - dx;
+        scaleX = Math.max(0.1, Math.min(10, newW / bw));
+        anchorX = bbox.maxX;
+        doX = true;
+        break;
+      }
+      case 'e': {
+        const newW = bw + dx;
+        scaleX = Math.max(0.1, Math.min(10, newW / bw));
+        anchorX = bbox.minX;
+        doX = true;
+        break;
+      }
+    }
+
+    path.points = orig.map(p => ({
+      x: doX ? anchorX + (p.x - anchorX) * scaleX : p.x,
+      y: doY ? anchorY + (p.y - anchorY) * scaleY : p.y,
+    }));
+    this.#stateMachine.updateSelectedPath({ points: path.points });
   }
 
   #computeBBox(points) {
@@ -788,5 +976,33 @@ class DrawArea {
     });
     this._pinchDocCenter = null;
     this._pinchLastScale = 1;
+
+    // Handle hit detection via overlay touch (capture phase, before TNT)
+    this._handleTouchStart = this._handleTouchStart.bind(this);
+    this.#touchOverlay.addEventListener('touchstart', this._handleTouchStart, { passive: false, capture: true });
+  }
+
+  _handleTouchStart(e) {
+    if (this._handleDragHandle) return; // already dragging
+    if (this.#stateMachine.mode !== 'selection') return;
+    if (!this._handleCenters || this._handleCenters.length === 0) return;
+    if (e.touches.length > 1) return; // multi-touch → let TNT handle
+
+    const touch = e.touches[0];
+    const rect = this.#el.getBoundingClientRect();
+    const sx = touch.clientX - rect.left;
+    const sy = touch.clientY - rect.top;
+
+    let hit = null;
+    let minDist = Infinity;
+    for (const h of this._handleCenters) {
+      const d = Math.hypot(sx - h.x, sy - h.y);
+      if (d < minDist) { minDist = d; hit = h; }
+    }
+
+    if (hit && minDist <= this._handleHitRadius * 1.5) {
+      e.stopPropagation();
+      this._startHandleDrag(hit.name, sx, sy);
+    }
   }
 }
