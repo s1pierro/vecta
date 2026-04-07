@@ -989,38 +989,12 @@ class CorePanel {
       this.#stateMachine.insertNodesBetweenSelected();
     });
 
-    // Section Tools
+    // Section Tools — replaced by SubWindow toolSelector
     const sectionTool = document.createElement('div');
     sectionTool.className = 'panel-section panel-section-tool';
-
-    const tools = document.createElement('div');
-    tools.id = 'panelTools';
-    const toolButtons = ['draw', 'select', 'pan'];
-    const toolIcons = {
-      draw: '<path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z"/>',
-      select: '<path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/>',
-      pan: '<path d="M5 9l-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20"/>'
-    };
-    toolButtons.forEach(tool => {
-      const btn = document.createElement('button');
-      btn.className = 'panel-tool-btn' + (tool === 'draw' ? ' active' : '');
-      btn.dataset.tool = tool;
-      btn.innerHTML = `<svg viewBox="0 0 24 24">${toolIcons[tool]}</svg>`;
-      btn.addEventListener('click', () => this.#selectTool(tool));
-      tools.appendChild(btn);
-    });
-
-    // Select mode toggle button (object/node) — only visible in select tool
-    const selectModeBtn = document.createElement('button');
-    selectModeBtn.id = 'selectModeBtn';
-    selectModeBtn.className = 'panel-tool-btn';
-    selectModeBtn.title = 'Mode sélection: objets';
-    selectModeBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>';
-    selectModeBtn.style.display = 'none'; // hidden until select tool is active
-    selectModeBtn.addEventListener('click', () => this.#toggleSelectMode());
-    tools.appendChild(selectModeBtn);
-
-    sectionTool.appendChild(tools);
+    sectionTool.innerHTML = '<div class="panel-section-info" style="color:rgba(255,255,255,0.3);font-size:0.7em;">Outils → fenêtre</div>';
+    sectionTool.addEventListener('click', () => this.#subWindowManager.toggleWindow('toolSelector'));
+    sectionTool.style.cursor = 'pointer';
     panel.appendChild(sectionTool);
 
     // Separator 2
@@ -1089,8 +1063,9 @@ class CorePanel {
   }
 
   #selectTool(tool) {
-    this.#el.querySelectorAll('.panel-tool-btn').forEach(b => b.classList.remove('active'));
-    this.#el.querySelector(`[data-tool="${tool}"]`).classList.add('active');
+    document.querySelectorAll('.panel-tool-btn').forEach(b => b.classList.remove('active'));
+    const btn = document.querySelector(`.panel-tool-btn[data-tool="${tool}"]`);
+    if (btn) btn.classList.add('active');
     this.#stateMachine.currentTool = tool;
 
     const modeMap = {
@@ -1100,23 +1075,27 @@ class CorePanel {
     };
     this.#stateMachine.setMode(modeMap[tool] || 'drawingTool');
 
-    // Show/hide select mode button
-    const selectModeBtn = this.#el.querySelector('#selectModeBtn');
+    // Show/hide select mode button in toolSelector SubWindow
+    const selectModeBtn = document.querySelector('#selectModeBtn');
     if (selectModeBtn) {
       selectModeBtn.style.display = tool === 'select' ? '' : 'none';
     }
   }
 
+  selectTool(tool) { this.#selectTool(tool); }
+
   #toggleSelectMode() {
     const current = this.#selectionManager.selectMode;
     const next = current === SelectMode.OBJECT ? SelectMode.NODE : SelectMode.OBJECT;
     this.#selectionManager.setSelectMode(next);
-    const btn = this.#el.querySelector('#selectModeBtn');
+    const btn = document.querySelector('#selectModeBtn');
     if (btn) {
       btn.classList.toggle('active', next === SelectMode.NODE);
       btn.title = next === SelectMode.NODE ? 'Mode sélection: nœuds' : 'Mode sélection: objets';
     }
   }
+
+  toggleSelectMode() { this.#toggleSelectMode(); }
 
   #selectColor(color) {
     document.querySelectorAll('.panel-color-btn').forEach(b => b.classList.remove('active'));

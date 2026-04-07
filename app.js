@@ -532,6 +532,51 @@ class Application {
       height: 'auto'
     });
 
+    // Tool selector SubWindow
+    const toolContentFn = () => {
+      const body = document.createElement('div');
+      body.style.cssText = 'display:flex;flex-direction:column;gap:6px;';
+      const toolButtons = ['draw', 'select', 'pan'];
+      const toolIcons = {
+        draw: '<path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z"/>',
+        select: '<path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/>',
+        pan: '<path d="M5 9l-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20"/>'
+      };
+      const toolLabels = { draw: 'Dessin', select: 'Sélection', pan: 'Pan' };
+      toolButtons.forEach((tool, i) => {
+        const btn = document.createElement('button');
+        btn.className = 'panel-tool-btn' + (i === 0 ? ' active' : '');
+        btn.dataset.tool = tool;
+        btn.style.cssText = `display:flex;align-items:center;gap:8px;padding:6px 12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:rgba(255,255,255,0.7);cursor:pointer;font-size:0.85em;`;
+        btn.innerHTML = `<svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:currentColor">${toolIcons[tool]}</svg><span>${toolLabels[tool]}</span>`;
+        btn.addEventListener('click', () => {
+          this.#corePanel.selectTool(tool);
+        });
+        body.appendChild(btn);
+      });
+
+      // Select mode toggle button
+      const selectModeBtn = document.createElement('button');
+      selectModeBtn.id = 'selectModeBtn';
+      selectModeBtn.className = 'panel-tool-btn';
+      selectModeBtn.style.cssText = 'display:none;align-items:center;gap:6px;padding:6px 12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:rgba(255,255,255,0.5);cursor:pointer;font-size:0.75em;margin-top:4px;';
+      selectModeBtn.title = 'Mode sélection: objets';
+      selectModeBtn.innerHTML = '<svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg><span>Mode nœuds</span>';
+      selectModeBtn.addEventListener('click', () => this.#corePanel.toggleSelectMode());
+      body.appendChild(selectModeBtn);
+
+      return body;
+    };
+    this.#subWindowManager.addWindow('toolSelector', {
+      id: 'toolSelector',
+      title: 'Outils',
+      content: toolContentFn,
+      left: '50vw',
+      top: '10vh',
+      width: '180px',
+      height: 'auto'
+    });
+
     // Toggle raw states with double-tap on statusBar
     statusBar.addEventListener('dblclick', () => {
       this.#subWindowManager.toggleWindow('rawStates');
