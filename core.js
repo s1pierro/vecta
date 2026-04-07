@@ -449,7 +449,6 @@ class DrawArea {
   #stateMachine;
   #el;
   #svg;
-  #backgroundRect;
   #svgPaths;
   #svgCurrentPath;
   #svgSelection;
@@ -465,7 +464,6 @@ class DrawArea {
   }
 
   get svgElement() { return this.#svg; }
-  get backgroundRect() { return this.#backgroundRect; }
   get touchOverlayElement() { return this.#touchOverlay; }
   get container() { return this.#el; }
 
@@ -483,12 +481,6 @@ class DrawArea {
     this.#svg.setAttribute('height', '100%');
     this.#applyTransform();
 
-    this.#backgroundRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-    this.#backgroundRect.setAttribute('id', 'backgroundRect');
-    this.#backgroundRect.setAttribute('width', '100%');
-    this.#backgroundRect.setAttribute('height', '100%');
-    this.#backgroundRect.setAttribute('fill', '#1a1a2e');
-
     this.#svgPaths = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     this.#svgPaths.setAttribute('id', 'svgPaths');
 
@@ -498,7 +490,6 @@ class DrawArea {
     this.#svgCurrentPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     this.#svgCurrentPath.setAttribute('id', 'currentPath');
 
-    this.#svg.appendChild(this.#backgroundRect);
     this.#svg.appendChild(this.#svgPaths);
     this.#svg.appendChild(this.#svgSelection);
     this.#svg.appendChild(this.#svgCurrentPath);
@@ -549,8 +540,8 @@ class DrawArea {
     const oldZoom = this.#zoom;
     const newZoom = Math.min(10, Math.max(0.1, oldZoom * factor));
     const s = newZoom / oldZoom;
-    this.#panX = px - (px - this.#panX) * s;
-    this.#panY = py - (py - this.#panY) * s;
+    this.#panX = px - (px - this.#panX) / s;
+    this.#panY = py - (py - this.#panY) / s;
     this.#zoom = newZoom;
     this.#applyTransform();
   }
@@ -693,9 +684,6 @@ class DrawArea {
     overlay.engine.on('tntBang', () => {
       console.log('[TNT] tntBang');
       this.#stateMachine.clearCanvas();
-      const newColor = this.#stateMachine.currentColor;
-      this.#stateMachine.currentColor = newColor;
-      this.#backgroundRect.setAttribute('fill', newColor);
     });
 
     // Pan via catch (2-finger gesture)
