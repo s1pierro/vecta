@@ -418,24 +418,39 @@
       padding: 2px 4px;
       border-radius: 3px;
     }
-    /* Nested levels: moderate border + dim font */
+    /* Nested levels: black borders + black font */
     .jec-nested-level {
-      background: rgba(255,255,255,0.02);
-      border: 1px solid rgba(255,255,255,0.12);
+      background: transparent;
+      border: 1px solid #000;
     }
-    /* Dim font for n+1 hierarchy */
     .jec-nested-level .jec-key-name {
-      color: rgba(255,255,255,0.25);
+      color: #000;
     }
     .jec-nested-level .jec-idx {
-      color: rgba(255,255,255,0.2);
+      color: #000;
     }
     .jec-nested-level .jec-type-tag {
-      color: rgba(255,255,255,0.15);
-      background: rgba(255,255,255,0.02);
+      color: #000;
+      background: rgba(0,0,0,0.05);
+      border: 1px solid #000;
     }
     .jec-nested-level .jec-label {
-      color: rgba(255,255,255,0.25);
+      color: #000;
+    }
+    .jec-nested-level .jec-null {
+      color: rgba(0,0,0,0.3);
+    }
+    .jec-nested-level .jec-add-btn {
+      color: #000;
+      border-color: rgba(0,0,0,0.3);
+      background: rgba(0,0,0,0.05);
+    }
+    .jec-nested-level .jec-del-btn {
+      background: rgba(0,0,0,0.1);
+      color: #000;
+    }
+    .jec-nested-level .jec-child .json-edit-card {
+      border-color: #000;
     }
     .jec-label-row {
       display: flex;
