@@ -546,7 +546,7 @@ class CorePanel {
       section.style.display = 'none';
       return;
     }
-    section.style.display = '';
+    section.style.display = 'flex';
     const count = this.#el.querySelector('#nodeCount');
     const indices = this.#el.querySelector('#nodeIndices');
     if (count) count.textContent = nodes.length;
