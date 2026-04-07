@@ -335,10 +335,8 @@ class Application {
       container.appendChild(appGround);
     }
 
-    const panelContainer = document.createElement('div');
-    panelContainer.id = 'corePanelContainer';
-    this.#corePanel.buildDom(panelContainer);
-    appGround.appendChild(panelContainer);
+    // Build top bar — appends directly to body so position:fixed works
+    this.#corePanel.buildDom(document.body);
 
     const drawContainer = document.createElement('div');
     drawContainer.id = 'drawAreaContainer';
@@ -687,10 +685,12 @@ class Application {
     this.#statesMachine.on('colorChange', () => this.#updateStatusBar());
     this.#statesMachine.on('sizeChange', () => this.#updateStatusBar());
     this.#statesMachine.on('selectedPathChange', (path) => {
+      this.#corePanel.syncSelection(path);
       this.#updateStatusBar();
       this.#updateRawStates();
     });
     this.#statesMachine.on('selectedNodesChange', () => {
+      this.#corePanel.syncNodeSelection();
       this.#drawArea._redraw();
       this.#updateRawStates();
     });
@@ -700,7 +700,11 @@ class Application {
     this.#selectionManager.on('stateChange', () => this.#updateRawStates());
     this.#statesMachine.on('currentPathChange', () => this.#updateRawStates());
     this.#statesMachine.on('selectablesChange', () => this.#updateRawStates());
-    this.#statesMachine.on('pathsChange', () => this.#updateRawStates());
+    this.#statesMachine.on('pathsChange', () => {
+      const path = this.#statesMachine.selectedPath;
+      if (path) this.#corePanel.syncSelection(path);
+      this.#updateRawStates();
+    });
     this.#statesMachine.on('historyChange', () => this.#updateHistoryButtons());
 
     // TNT state events

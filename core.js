@@ -833,7 +833,7 @@ class CorePanel {
     panel.id = 'corePanel';
     this.#el = panel;
 
-    // ── Top bar: only global actions + window list ──
+    // ── Top bar: actions + GNOME2-style horizontal window list ──
     const bar = document.createElement('div');
     bar.className = 'topbar';
 
@@ -860,23 +860,16 @@ class CorePanel {
     const sep = document.createElement('div');
     sep.className = 'topbar-sep';
 
-    // Window list button
-    const winBtn = this.#makeBtn('winListBtn', 'Fenêtres',
-      '<svg viewBox="0 0 24 24"><path d="M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z"/></svg>');
-    winBtn.addEventListener('click', () => this.#toggleWinList());
-
-    // Window list dropdown
+    // GNOME2-style horizontal window list
     const winList = document.createElement('div');
     winList.id = 'topbarWinList';
-    winList.className = 'topbar-win-list';
-    winList.style.display = 'none';
+    winList.className = 'topbar-win-list-gnome2';
 
     bar.appendChild(fullscreenBtn);
     bar.appendChild(clearBtn);
     bar.appendChild(undoBtn);
     bar.appendChild(redoBtn);
     bar.appendChild(sep);
-    bar.appendChild(winBtn);
     bar.appendChild(winList);
     panel.appendChild(bar);
 
@@ -885,6 +878,14 @@ class CorePanel {
     appInfo.className = 'topbar-app-info';
     appInfo.innerHTML = `<span class="app-name">${APP_NAME}</span><span class="app-version">${APP_VERSION}</span>`;
     panel.appendChild(appInfo);
+
+    container.appendChild(panel);
+
+    // Initial window list + subscribe to changes
+    this.#updateWinList();
+    this.#subWindowManager.on('windowAdded', () => this.#updateWinList());
+    this.#subWindowManager.on('windowRemoved', () => this.#updateWinList());
+    this.#subWindowManager.on('visibilityChange', () => this.#updateWinList());
 
     // Fullscreen change handler
     document.addEventListener('fullscreenchange', () => {
@@ -897,6 +898,20 @@ class CorePanel {
         expandIcon.style.display = 'block';
         compressIcon.style.display = 'none';
       }
+    });
+  }
+
+  #updateWinList() {
+    const list = document.getElementById('topbarWinList');
+    if (!list) return;
+    list.innerHTML = '';
+    this.#subWindowManager.getWindows().forEach(w => {
+      const btn = document.createElement('button');
+      btn.className = 'topbar-win-btn' + (w.visible ? ' active' : '');
+      btn.title = w.title;
+      btn.innerHTML = `<svg viewBox="0 0 16 16" class="topbar-win-icon"><rect x="1" y="1" width="14" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="12" cy="4" r="1.5" fill="currentColor" opacity="0.5"/></svg><span class="topbar-win-label">${w.title}</span>`;
+      btn.addEventListener('click', () => this.#subWindowManager.toggleWindow(w.id));
+      list.appendChild(btn);
     });
   }
 
@@ -917,16 +932,19 @@ class CorePanel {
       list.style.display = 'none';
     } else {
       list.innerHTML = '';
+      const ul = document.createElement('ul');
+      ul.className = 'topbar-win-list-ul';
       this.#subWindowManager.getWindows().forEach(w => {
-        const row = document.createElement('button');
-        row.className = 'topbar-win-item' + (w.visible ? ' visible' : '');
-        row.innerHTML = `<span>${w.title}</span><span>${w.visible ? '●' : '○'}</span>`;
-        row.addEventListener('click', () => {
+        const li = document.createElement('li');
+        li.className = 'topbar-win-item' + (w.visible ? ' visible' : '');
+        li.innerHTML = `<span>${w.title}</span><span class="topbar-win-status">${w.visible ? '●' : '○'}</span>`;
+        li.addEventListener('click', () => {
           this.#subWindowManager.toggleWindow(w.id);
           list.style.display = 'none';
         });
-        list.appendChild(row);
+        ul.appendChild(li);
       });
+      list.appendChild(ul);
       list.style.display = 'block';
     }
   }
@@ -979,6 +997,32 @@ class CorePanel {
   deleteNodes() { this.#stateMachine.deleteSelectedNodes(); }
   insertNodes() { this.#stateMachine.insertNodesBetweenSelected(); }
   simplifySelectedPath(tol) { this.#stateMachine.simplifySelectedPath(tol); }
+
+  // ── Sync toolSelector UI with current selection ──
+  syncSelection(path) {
+    const propsSection = document.getElementById('toolPropsSection');
+    if (propsSection) propsSection.style.display = path ? '' : 'none';
+    if (path) {
+      const el = (id) => document.getElementById(id);
+      if (el('tpColor')) el('tpColor').textContent = path.color;
+      if (el('tpSize')) el('tpSize').textContent = path.size + 'px';
+      if (el('tpPoints')) el('tpPoints').textContent = path.points ? path.points.length : 0;
+    }
+  }
+
+  syncNodeSelection() {
+    const nodes = this.#selectionManager.selectedNodes;
+    const nodeSection = document.getElementById('toolNodeSection');
+    if (nodeSection) {
+      nodeSection.style.display = nodes && nodes.length > 0 ? '' : 'none';
+      if (nodes && nodes.length > 0) {
+        const el = (id) => document.getElementById(id);
+        if (el('tnCount')) el('tnCount').textContent = nodes.length;
+        if (el('tnIndices')) el('tnIndices').textContent = nodes.sort((a, b) => a - b).join(', ');
+      }
+    }
+    this.#syncNodeTypeSelector();
+  }
 
   #syncNodeTypeSelector() {
     const path = this.#selectionManager.selectedPath;

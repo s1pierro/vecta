@@ -10,11 +10,12 @@
   height: 40px;
   background: rgba(30, 30, 50, 0.95);
   backdrop-filter: blur(8px);
-  display: flex;
+  display: flex !important;
   align-items: center;
-  z-index: 200;
+  z-index: 9999;
   padding: 0 8px;
   gap: 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .topbar {
@@ -29,17 +30,18 @@
   height: 32px;
   border-radius: 6px;
   border: 1px solid rgba(255, 255, 255, 0.15);
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(255, 255, 255, 0.06);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  color: rgba(255, 255, 255, 0.6);
+  color: rgba(255, 255, 255, 0.7);
   transition: all 0.15s;
+  flex-shrink: 0;
 }
 
 .topbar-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.12);
   color: #fff;
 }
 
@@ -54,6 +56,8 @@
   stroke: currentColor;
   fill: none;
   stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .topbar-sep {
@@ -61,6 +65,7 @@
   height: 24px;
   background: rgba(255, 255, 255, 0.15);
   margin: 0 4px;
+  flex-shrink: 0;
 }
 
 /* Window list dropdown */
@@ -68,7 +73,7 @@
   position: absolute;
   top: 44px;
   left: 8px;
-  background: rgba(30, 30, 50, 0.97);
+  background: rgba(30, 30, 50, 0.98);
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 6px;
   padding: 4px;
@@ -76,7 +81,7 @@
   flex-direction: column;
   gap: 2px;
   min-width: 150px;
-  z-index: 300;
+  z-index: 10000;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
 
@@ -108,11 +113,13 @@
   align-items: center;
   gap: 6px;
   margin-left: auto;
-  font-size: 0.7em;
-  color: rgba(255, 255, 255, 0.3);
+  font-size: 0.75em;
+  color: rgba(255, 255, 255, 0.4);
+  flex-shrink: 0;
 }
 
 .topbar-app-info .app-name {
   font-weight: bold;
-  color: rgba(255, 255, 255, 0.5);
+  color: rgba(255, 255, 255, 0.6);
+  letter-spacing: 0.5px;
 }
