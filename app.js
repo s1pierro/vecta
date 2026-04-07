@@ -1,3 +1,303 @@
+/**
+ * SubWindow — a draggable, resizable floating panel.
+ * Generic reusable window with header (title + close button), body, and resize handle.
+ */
+class SubWindow {
+  #id;
+  #title;
+  #contentBuilder;
+  #el = null;
+  #visible = false;
+  #position;  // {left, top}
+  #size;      // {width, height}
+
+  constructor(options = {}) {
+    this.#id = options.id || `subwindow-${Date.now()}`;
+    this.#title = options.title || 'Window';
+    this.#contentBuilder = options.content || null; // function that returns DOM
+    this.#position = { left: options.left || '10vw', top: options.top || '10vh' };
+    this.#size = { width: options.width || '33vw', height: options.height || '50vh' };
+    this._listeners = {};
+  }
+
+  get id() { return this.#id; }
+  get title() { return this.#title; }
+  get visible() { return this.#visible; }
+  get element() { return this.#el; }
+
+  on(event, cb) {
+    if (!this._listeners[event]) this._listeners[event] = [];
+    this._listeners[event].push(cb);
+  }
+
+  #emit(event, data) {
+    if (this._listeners[event]) {
+      this._listeners[event].forEach(cb => cb(data));
+    }
+  }
+
+  /**
+   * Build the modal DOM structure and append it to the given container.
+   * @param {HTMLElement} container - Where to mount the modal
+   */
+  buildDom(container) {
+    const modal = document.createElement('div');
+    modal.id = this.#id;
+    modal.className = 'sub-window';
+    modal.style.cssText = `
+      position:fixed;
+      left:${this.#position.left};top:${this.#position.top};
+      width:${this.#size.width};height:${this.#size.height};
+      min-width:200px;min-height:150px;
+      z-index:9999;
+      background:rgba(15,15,30,0.96);
+      border:1px solid rgba(255,255,255,0.15);
+      border-radius:8px;
+      display:none;
+      flex-direction:column;
+      overflow:hidden;
+      box-shadow:0 8px 32px rgba(0,0,0,0.5);
+      backdrop-filter:blur(8px);
+    `;
+    this.#el = modal;
+
+    // Header
+    const header = document.createElement('div');
+    header.className = 'sub-window-header';
+    header.style.cssText = `
+      display:flex;align-items:center;justify-content:space-between;
+      padding:6px 10px;background:rgba(255,255,255,0.05);
+      border-bottom:1px solid rgba(255,255,255,0.1);
+      cursor:grab;user-select:none;flex-shrink:0;
+    `;
+    header.innerHTML =
+      `<span class="sub-window-title" style="font-size:0.7em;font-family:'SF Mono','Fira Code',monospace;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:1px;">${this.#title}</span>` +
+      '<button class="sub-window-close" title="Close" style="width:18px;height:18px;border-radius:50%;border:none;background:rgba(255,255,255,0.1);color:rgba(255,255,255,0.5);cursor:pointer;font-size:12px;line-height:1;display:flex;align-items:center;justify-content:center;">×</button>';
+    modal.appendChild(header);
+
+    // Body
+    const body = document.createElement('div');
+    body.className = 'sub-window-body';
+    body.style.cssText = `
+      flex:1;overflow-y:auto;padding:8px;
+      display:flex;flex-wrap:wrap;align-content:flex-start;gap:8px;
+    `;
+    if (this.#contentBuilder) {
+      const content = this.#contentBuilder();
+      if (content) body.appendChild(content);
+    }
+    modal.appendChild(body);
+
+    container.appendChild(modal);
+
+    // Close button
+    header.querySelector('.sub-window-close').addEventListener('click', () => this.hide());
+
+    // Double-tap to toggle
+    header.addEventListener('dblclick', () => this.toggle());
+
+    // Drag
+    let dragging = false, dragX, dragY;
+    header.addEventListener('mousedown', (e) => {
+      dragging = true;
+      dragX = e.clientX - modal.offsetLeft;
+      dragY = e.clientY - modal.offsetTop;
+      e.preventDefault();
+    });
+    header.addEventListener('touchstart', (e) => {
+      dragging = true;
+      const t = e.touches[0];
+      dragX = t.clientX - modal.offsetLeft;
+      dragY = t.clientY - modal.offsetTop;
+    }, { passive: true });
+    window.addEventListener('mousemove', (e) => {
+      if (!dragging) return;
+      modal.style.left = (e.clientX - dragX) + 'px';
+      modal.style.top = (e.clientY - dragY) + 'px';
+    });
+    window.addEventListener('touchmove', (e) => {
+      if (!dragging) return;
+      const t = e.touches[0];
+      modal.style.left = (t.clientX - dragX) + 'px';
+      modal.style.top = (t.clientY - dragY) + 'px';
+    }, { passive: true });
+    window.addEventListener('mouseup', () => { dragging = false; });
+    window.addEventListener('touchend', () => { dragging = false; });
+
+    // Resize
+    let resizing = false, resizeStartX, resizeStartY, resizeStartW, resizeStartH;
+    modal.addEventListener('mousedown', (e) => {
+      const rect = modal.getBoundingClientRect();
+      if (e.clientX > rect.right - 20 && e.clientY > rect.bottom - 20) {
+        resizing = true;
+        resizeStartX = e.clientX;
+        resizeStartY = e.clientY;
+        resizeStartW = rect.width;
+        resizeStartH = rect.height;
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    });
+    modal.addEventListener('touchstart', (e) => {
+      const rect = modal.getBoundingClientRect();
+      const t = e.touches[0];
+      if (t.clientX > rect.right - 20 && t.clientY > rect.bottom - 20) {
+        resizing = true;
+        resizeStartX = t.clientX;
+        resizeStartY = t.clientY;
+        resizeStartW = rect.width;
+        resizeStartH = rect.height;
+      }
+    }, { passive: true });
+    window.addEventListener('mousemove', (e) => {
+      if (!resizing) return;
+      const w = Math.max(200, resizeStartW + (e.clientX - resizeStartX));
+      const h = Math.max(150, resizeStartH + (e.clientY - resizeStartY));
+      modal.style.width = w + 'px';
+      modal.style.height = h + 'px';
+    });
+    window.addEventListener('touchmove', (e) => {
+      if (!resizing) return;
+      const t = e.touches[0];
+      const w = Math.max(200, resizeStartW + (t.clientX - resizeStartX));
+      const h = Math.max(150, resizeStartH + (t.clientY - resizeStartY));
+      modal.style.width = w + 'px';
+      modal.style.height = h + 'px';
+    }, { passive: true });
+    window.addEventListener('mouseup', () => { resizing = false; });
+    window.addEventListener('touchend', () => { resizing = false; });
+  }
+
+  show() {
+    if (this.#el) {
+      this.#el.style.display = 'flex';
+      this.#visible = true;
+      this.#emit('show');
+    }
+  }
+
+  hide() {
+    if (this.#el) {
+      this.#el.style.display = 'none';
+      this.#visible = false;
+      this.#emit('hide');
+    }
+  }
+
+  toggle() {
+    if (this.#visible) this.hide();
+    else this.show();
+  }
+
+  setTitle(title) {
+    this.#title = title;
+    const titleEl = this.#el?.querySelector('.sub-window-title');
+    if (titleEl) titleEl.textContent = title;
+  }
+}
+
+/**
+ * SubWindowManager — manages a collection of SubWindows.
+ * Provides add/remove/toggle/list API and emits events.
+ */
+class SubWindowManager {
+  #windows = new Map();
+  #container;
+  _listeners = {};
+
+  constructor(container) {
+    this.#container = container || document.body;
+  }
+
+  on(event, cb) {
+    if (!this._listeners[event]) this._listeners[event] = [];
+    this._listeners[event].push(cb);
+  }
+
+  #emit(event, data) {
+    if (this._listeners[event]) {
+      this._listeners[event].forEach(cb => cb(data));
+    }
+  }
+
+  /**
+   * Register and build a new sub-window.
+   * @param {string} id - Unique window ID
+   * @param {object} options - SubWindow constructor options
+   * @returns {SubWindow}
+   */
+  addWindow(id, options = {}) {
+    if (this.#windows.has(id)) return this.#windows.get(id);
+    const win = new SubWindow({ id, ...options });
+    win.buildDom(this.#container);
+    this.#windows.set(id, win);
+    win.on('show', () => this.#emit('visibilityChange', { id, visible: true }));
+    win.on('hide', () => this.#emit('visibilityChange', { id, visible: false }));
+    this.#emit('windowAdded', win);
+    return win;
+  }
+
+  /**
+   * Get a registered sub-window by ID.
+   * @param {string} id
+   * @returns {SubWindow|null}
+   */
+  getWindow(id) {
+    return this.#windows.get(id) || null;
+  }
+
+  /**
+   * Remove a sub-window by ID.
+   * @param {string} id
+   */
+  removeWindow(id) {
+    const win = this.#windows.get(id);
+    if (win && win.element) win.element.remove();
+    this.#windows.delete(id);
+    this.#emit('windowRemoved', { id });
+  }
+
+  /**
+   * Toggle a sub-window's visibility.
+   * @param {string} id
+   */
+  toggleWindow(id) {
+    const win = this.#windows.get(id);
+    if (win) win.toggle();
+  }
+
+  /**
+   * Show all registered windows.
+   */
+  showAll() {
+    this.#windows.forEach(w => w.show());
+  }
+
+  /**
+   * Hide all registered windows.
+   */
+  hideAll() {
+    this.#windows.forEach(w => w.hide());
+  }
+
+  /**
+   * Get list of all registered windows.
+   * @returns {Array<{id: string, title: string, visible: boolean}>}
+   */
+  getWindows() {
+    const result = [];
+    this.#windows.forEach((win, id) => {
+      result.push({ id, title: win.title, visible: win.visible });
+    });
+    return result;
+  }
+
+  /**
+   * Get the raw count of registered windows (for status display).
+   */
+  get count() { return this.#windows.size; }
+}
+
 class LayoutManager {
   #corePanel;
   #drawArea;
@@ -29,6 +329,7 @@ class LayoutManager {
 class Application {
   #statesMachine;
   #selectionManager;
+  #subWindowManager;
   #corePanel;
   #drawArea;
   #touchOverlay;
@@ -38,7 +339,8 @@ class Application {
     this.#statesMachine = new StateMachine();
     this.#selectionManager = new SelectionManager(this.#statesMachine);
     this.#statesMachine.setSelectionManager(this.#selectionManager);
-    this.#corePanel = new CorePanel(this.#statesMachine, this.#selectionManager);
+    this.#subWindowManager = new SubWindowManager(document.body);
+    this.#corePanel = new CorePanel(this.#statesMachine, this.#selectionManager, this.#subWindowManager);
     this.#drawArea = new DrawArea(this.#statesMachine, this.#selectionManager);
 
     this.buildDom(options.container || document.body);
@@ -47,6 +349,10 @@ class Application {
 
   get drawArea() {
     return this.#drawArea;
+  }
+
+  get subWindowManager() {
+    return this.#subWindowManager;
   }
 
   buildDom(container) {
@@ -118,18 +424,13 @@ class Application {
         '<span class="raw-chip" data-state="tnt:pinching">pinching</span>' +
         '<span class="raw-chip" data-state="tnt:catching">catching</span>' +
       '</div>';
-    container.appendChild(statusBar);
+    container.appendChild(rawBar);
 
-    // Raw states modal — draggable, resizable debug panel
-    const modal = document.createElement('div');
-    modal.id = 'rawStatesModal';
-    modal.style.display = 'none'; // hidden by default, toggle with double-tap on statusBar
-    modal.innerHTML =
-      '<div class="raw-modal-header">' +
-        '<span class="raw-modal-title">raw-states</span>' +
-        '<button class="raw-modal-close" title="Close">×</button>' +
-      '</div>' +
-      '<div class="raw-modal-body">' +
+    // Register raw-states modal as a SubWindow
+    const rawContentFn = () => {
+      const body = document.createElement('div');
+      body.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;';
+      body.innerHTML =
         '<div class="raw-state-group">' +
           '<span class="raw-label">mode</span>' +
           '<span class="raw-chip" data-state="mode:drawingTool">drawingTool</span>' +
@@ -164,91 +465,23 @@ class Application {
           '<span class="raw-chip" data-state="tnt:grabbing">grabbing</span>' +
           '<span class="raw-chip" data-state="tnt:pinching">pinching</span>' +
           '<span class="raw-chip" data-state="tnt:catching">catching</span>' +
-        '</div>' +
-      '</div>';
-    document.body.appendChild(modal);
+        '</div>';
+      return body;
+    };
+    this.#subWindowManager.addWindow('rawStates', {
+      id: 'rawStates',
+      title: 'raw-states',
+      content: rawContentFn,
+      left: '10vw',
+      top: '10vh',
+      width: '33vw',
+      height: '50vh'
+    });
 
-    // Toggle visibility with double-tap on statusBar
+    // Toggle raw states with double-tap on statusBar
     statusBar.addEventListener('dblclick', () => {
-      modal.style.display = modal.style.display === 'none' ? 'flex' : 'none';
+      this.#subWindowManager.toggleWindow('rawStates');
     });
-
-    // Close button
-    modal.querySelector('.raw-modal-close').addEventListener('click', () => {
-      modal.style.display = 'none';
-    });
-
-    // Drag logic
-    const header = modal.querySelector('.raw-modal-header');
-    let dragging = false, dragX, dragY;
-    header.addEventListener('mousedown', (e) => {
-      dragging = true;
-      dragX = e.clientX - modal.offsetLeft;
-      dragY = e.clientY - modal.offsetTop;
-      e.preventDefault();
-    });
-    header.addEventListener('touchstart', (e) => {
-      dragging = true;
-      const t = e.touches[0];
-      dragX = t.clientX - modal.offsetLeft;
-      dragY = t.clientY - modal.offsetTop;
-    }, { passive: true });
-    window.addEventListener('mousemove', (e) => {
-      if (!dragging) return;
-      modal.style.left = (e.clientX - dragX) + 'px';
-      modal.style.top = (e.clientY - dragY) + 'px';
-    });
-    window.addEventListener('touchmove', (e) => {
-      if (!dragging) return;
-      const t = e.touches[0];
-      modal.style.left = (t.clientX - dragX) + 'px';
-      modal.style.top = (t.clientY - dragY) + 'px';
-    }, { passive: true });
-    window.addEventListener('mouseup', () => { dragging = false; });
-    window.addEventListener('touchend', () => { dragging = false; });
-
-    // Resize logic
-    let resizing = false, resizeStartX, resizeStartY, resizeStartW, resizeStartH;
-    modal.addEventListener('mousedown', (e) => {
-      const rect = modal.getBoundingClientRect();
-      if (e.clientX > rect.right - 20 && e.clientY > rect.bottom - 20) {
-        resizing = true;
-        resizeStartX = e.clientX;
-        resizeStartY = e.clientY;
-        resizeStartW = rect.width;
-        resizeStartH = rect.height;
-        e.preventDefault();
-        e.stopPropagation();
-      }
-    });
-    modal.addEventListener('touchstart', (e) => {
-      const rect = modal.getBoundingClientRect();
-      const t = e.touches[0];
-      if (t.clientX > rect.right - 20 && t.clientY > rect.bottom - 20) {
-        resizing = true;
-        resizeStartX = t.clientX;
-        resizeStartY = t.clientY;
-        resizeStartW = rect.width;
-        resizeStartH = rect.height;
-      }
-    }, { passive: true });
-    window.addEventListener('mousemove', (e) => {
-      if (!resizing) return;
-      const w = Math.max(200, resizeStartW + (e.clientX - resizeStartX));
-      const h = Math.max(150, resizeStartH + (e.clientY - resizeStartY));
-      modal.style.width = w + 'px';
-      modal.style.height = h + 'px';
-    });
-    window.addEventListener('touchmove', (e) => {
-      if (!resizing) return;
-      const t = e.touches[0];
-      const w = Math.max(200, resizeStartW + (t.clientX - resizeStartX));
-      const h = Math.max(150, resizeStartH + (t.clientY - resizeStartY));
-      modal.style.width = w + 'px';
-      modal.style.height = h + 'px';
-    }, { passive: true });
-    window.addEventListener('mouseup', () => { resizing = false; });
-    window.addEventListener('touchend', () => { resizing = false; });
   }
 
   #init() {
@@ -308,7 +541,8 @@ class Application {
 
   #updateRawStates() {
     const sm = this.#statesMachine;
-    const modal = document.getElementById('rawStatesModal');
+    const win = this.#subWindowManager.getWindow('rawStates');
+    const modal = win ? win.element : null;
     if (!modal) return;
     modal.querySelectorAll('.raw-chip').forEach(chip => {
       const key = chip.dataset.state;
@@ -326,7 +560,8 @@ class Application {
   }
 
   #updateTntState(tntState) {
-    const modal = document.getElementById('rawStatesModal');
+    const win = this.#subWindowManager.getWindow('rawStates');
+    const modal = win ? win.element : null;
     if (!modal) return;
     modal.querySelectorAll('.raw-chip').forEach(chip => {
       if (chip.dataset.state.startsWith('tnt:')) {

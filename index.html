@@ -176,6 +176,67 @@
       background: linear-gradient(135deg, transparent 50%, rgba(255,255,255,0.2) 50%);
       border-bottom-right-radius: 8px;
     }
+
+    /* Sub-window resize handle */
+    .sub-window::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      right: 0;
+      width: 16px;
+      height: 16px;
+      cursor: nwse-resize;
+      background: linear-gradient(135deg, transparent 50%, rgba(255,255,255,0.2) 50%);
+      border-bottom-right-radius: 8px;
+    }
+    .sub-window-header:active { cursor: grabbing; }
+    .sub-window-close:hover { background: rgba(255,80,80,0.3); color: #fff; }
+
+    /* Sub-windows list in panel */
+    .subwindows-header {
+      padding: 4px 0;
+      margin-bottom: 4px;
+    }
+    .subwindows-title {
+      color: rgba(255,255,255,0.4);
+      font-size: 0.7em;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .subwindows-list {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .subwindow-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 3px 6px;
+      border: none;
+      border-radius: 3px;
+      background: rgba(255,255,255,0.04);
+      color: rgba(255,255,255,0.5);
+      cursor: pointer;
+      font-size: 0.7em;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      transition: background 0.1s;
+    }
+    .subwindow-item:hover {
+      background: rgba(255,255,255,0.1);
+    }
+    .subwindow-item.visible {
+      background: rgba(105,240,174,0.1);
+      color: #69f0ae;
+    }
+    .subwindow-item-title {
+      flex: 1;
+      text-align: left;
+    }
+    .subwindow-item-status {
+      font-size: 0.9em;
+      margin-left: 6px;
+    }
     #app-ground.landscape {
       flex-direction: row;
     }

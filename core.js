@@ -819,11 +819,13 @@ class StateMachine {
 class CorePanel {
   #stateMachine;
   #selectionManager;
+  #subWindowManager;
   #el;
 
-  constructor(stateMachine, selectionManager) {
+  constructor(stateMachine, selectionManager, subWindowManager) {
     this.#stateMachine = stateMachine;
     this.#selectionManager = selectionManager;
+    this.#subWindowManager = subWindowManager;
   }
 
   buildDom(container) {
@@ -1068,6 +1070,29 @@ class CorePanel {
     sectionSizes.appendChild(sizes);
     panel.appendChild(sectionSizes);
 
+    // Separator 4
+    const sep4 = document.createElement('div');
+    sep4.className = 'panel-sep';
+    panel.appendChild(sep4);
+
+    // Section Sub-Windows List
+    const sectionSubWindows = document.createElement('div');
+    sectionSubWindows.className = 'panel-section panel-section-subwindows';
+    sectionSubWindows.id = 'panelSubWindows';
+    sectionSubWindows.innerHTML =
+      '<div class="subwindows-header">' +
+        '<span class="subwindows-title">Fenêtres</span>' +
+      '</div>' +
+      '<div class="subwindows-list" id="subWindowsList"></div>';
+    panel.appendChild(sectionSubWindows);
+
+    // Wire sub-window list updates
+    if (this.#subWindowManager) {
+      this.#subWindowManager.on('windowAdded', () => this.#updateSubWindowsList());
+      this.#subWindowManager.on('windowRemoved', () => this.#updateSubWindowsList());
+      this.#subWindowManager.on('visibilityChange', () => this.#updateSubWindowsList());
+    }
+
     container.appendChild(panel);
 
     document.addEventListener('fullscreenchange', () => {
@@ -1171,6 +1196,24 @@ class CorePanel {
 
     // Sync node type selector
     this.#syncNodeTypeSelector();
+  }
+
+  #updateSubWindowsList() {
+    const list = document.getElementById('subWindowsList');
+    if (!list || !this.#subWindowManager) return;
+    list.innerHTML = '';
+    const windows = this.#subWindowManager.getWindows();
+    windows.forEach(w => {
+      const row = document.createElement('button');
+      row.className = 'subwindow-item' + (w.visible ? ' visible' : '');
+      row.innerHTML =
+        `<span class="subwindow-item-title">${w.title}</span>` +
+        `<span class="subwindow-item-status">${w.visible ? '●' : '○'}</span>`;
+      row.addEventListener('click', () => {
+        this.#subWindowManager.toggleWindow(w.id);
+      });
+      list.appendChild(row);
+    });
   }
 
   #syncNodeTypeSelector() {
