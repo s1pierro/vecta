@@ -451,7 +451,7 @@ class Application {
     const colorContentFn = () => {
       const body = document.createElement('div');
       body.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;justify-content:center;';
-      const colorList = ['#1a1a2e', '#ffffff', '#ff5252', '#4fc3f7', '#69f0ae', '#ffd54f', '#ba68c8', '#ff9800', '#212121'];
+      const colorList = ['#000000', '#ffffff', '#ff5252', '#4fc3f7', '#69f0ae', '#ffd54f', '#ba68c8', '#ff9800', '#212121'];
       colorList.forEach((color, i) => {
         const btn = document.createElement('button');
         btn.className = 'panel-color-btn' + (i === 0 ? ' active' : '');

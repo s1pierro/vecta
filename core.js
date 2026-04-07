@@ -420,7 +420,7 @@ class StateMachine {
     this.#state = {
       mode: 'drawingTool',
       currentTool: 'draw',
-      currentColor: '#ffffff',
+      currentColor: '#000000',
       currentSize: 8,
       paths: [],
       currentPath: null,
