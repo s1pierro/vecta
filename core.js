@@ -1601,8 +1601,7 @@ class DrawArea {
             }
           }
         }
-      }
-    });
+      });
     } // end if (isNodeMode)
 
     this._handleCenters = [...nodeHandles, ...allHandles];
