@@ -1102,9 +1102,12 @@ class DrawArea {
           this._selBBoxStart = null;
           this._selBBoxCurrent = null;
         } else {
-          this._selectNodesInBBox();
+          // Hide bbox before selection calc to prevent redraw of stale bbox
+          const bboxStart = this._nodeSelBBoxStart;
+          const bboxCurrent = this._nodeSelBBoxCurrent;
           this._nodeSelBBoxStart = null;
           this._nodeSelBBoxCurrent = null;
+          this._selectNodesInBBox(bboxStart, bboxCurrent);
         }
       }
     });
@@ -1255,14 +1258,15 @@ class DrawArea {
 
   /**
    * Sélectionne les nœuds dont la position est dans la boîte de sélection.
+   * @param {object} bboxStart - Start point in document coords
+   * @param {object} bboxCurrent - Current point in document coords
    */
-  _selectNodesInBBox() {
-    if (!this._nodeSelBBoxStart || !this._nodeSelBBoxCurrent) return;
-    // _nodeSelBBoxStart/Current are in document coordinates (from screenToDoc)
-    const x1 = Math.min(this._nodeSelBBoxStart.x, this._nodeSelBBoxCurrent.x);
-    const y1 = Math.min(this._nodeSelBBoxStart.y, this._nodeSelBBoxCurrent.y);
-    const x2 = Math.max(this._nodeSelBBoxStart.x, this._nodeSelBBoxCurrent.x);
-    const y2 = Math.max(this._nodeSelBBoxStart.y, this._nodeSelBBoxCurrent.y);
+  _selectNodesInBBox(bboxStart, bboxCurrent) {
+    if (!bboxStart || !bboxCurrent) return;
+    const x1 = Math.min(bboxStart.x, bboxCurrent.x);
+    const y1 = Math.min(bboxStart.y, bboxCurrent.y);
+    const x2 = Math.max(bboxStart.x, bboxCurrent.x);
+    const y2 = Math.max(bboxStart.y, bboxCurrent.y);
 
     if (x2 - x1 < 5 && y2 - y1 < 5) return; // too small, was a tap
 
