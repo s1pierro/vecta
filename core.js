@@ -1,6 +1,46 @@
 const APP_NAME = 'Vecta';
 const APP_VERSION = '0.1';
 
+/**
+ * Distance perpendiculaire d'un point à un segment.
+ */
+function perpendicularDistance(point, lineStart, lineEnd) {
+  const dx = lineEnd.x - lineStart.x;
+  const dy = lineEnd.y - lineStart.y;
+  const mag = Math.hypot(dx, dy);
+  if (mag === 0) return Math.hypot(point.x - lineStart.x, point.y - lineStart.y);
+  const u = ((point.x - lineStart.x) * dx + (point.y - lineStart.y) * dy) / (mag * mag);
+  const ix = lineStart.x + u * dx;
+  const iy = lineStart.y + u * dy;
+  return Math.hypot(point.x - ix, point.y - iy);
+}
+
+/**
+ * Algorithme de Douglas-Peucker pour simplifier un tracé.
+ * @param {{x:number,y:number}[]} points
+ * @param {number} tolerance - Distance maximale (px) pour considérer un point redondant.
+ * @returns {{x:number,y:number}[]}
+ */
+function douglasPeucker(points, tolerance) {
+  if (points.length <= 2) return points.slice();
+  let maxDist = 0;
+  let maxIndex = 0;
+  const end = points.length - 1;
+  for (let i = 1; i < end; i++) {
+    const dist = perpendicularDistance(points[i], points[0], points[end]);
+    if (dist > maxDist) {
+      maxDist = dist;
+      maxIndex = i;
+    }
+  }
+  if (maxDist > tolerance) {
+    const left = douglasPeucker(points.slice(0, maxIndex + 1), tolerance);
+    const right = douglasPeucker(points.slice(maxIndex), tolerance);
+    return left.slice(0, -1).concat(right);
+  }
+  return [points[0], points[end]];
+}
+
 class StateMachine {
   #state;
   #listeners;
@@ -129,6 +169,14 @@ class StateMachine {
     }
   }
 
+  simplifySelectedPath(tolerance) {
+    if (!this.#state.selectedPath) return;
+    const path = this.#state.selectedPath;
+    path.points = douglasPeucker(path.points, tolerance);
+    this.#emit('pathsChange', this.#state.paths);
+    this.#saveState();
+  }
+
   clearCanvas() {
     this.#state.paths = [];
     this.#emit('clearCanvas');
@@ -224,14 +272,39 @@ class CorePanel {
     const sectionSelection = document.createElement('div');
     sectionSelection.className = 'panel-section panel-section-selection';
     sectionSelection.id = 'panelSelection';
-    sectionSelection.innerHTML =
-      '<span class="selection-prop-label">Couleur</span>' +
-      '<span class="selection-prop-value" id="selColor"></span>' +
-      '<span class="selection-prop-label">Taille</span>' +
-      '<span class="selection-prop-value" id="selSize"></span>' +
-      '<span class="selection-prop-label">Points</span>' +
-      '<span class="selection-prop-value" id="selPoints"></span>';
+
+    const selInfo = document.createElement('div');
+    selInfo.className = 'selection-info';
+    selInfo.innerHTML =
+      '<div><span class="selection-prop-label">Couleur</span><span class="selection-prop-value" id="selColor"></span></div>' +
+      '<div><span class="selection-prop-label">Taille</span><span class="selection-prop-value" id="selSize"></span></div>' +
+      '<div><span class="selection-prop-label">Points</span><span class="selection-prop-value" id="selPoints"></span></div>';
+    sectionSelection.appendChild(selInfo);
+
+    const selActions = document.createElement('div');
+    selActions.className = 'selection-actions';
+    selActions.innerHTML =
+      '<div class="simplify-control">' +
+        '<span class="selection-prop-label">Tolérance</span>' +
+        '<span class="selection-prop-value" id="selTolerance">5px</span>' +
+        '<input type="range" id="selToleranceSlider" min="1" max="50" step="1" value="5">' +
+      '</div>' +
+      '<button class="panel-btn" id="simplifyBtn" title="Simplifier">' +
+        '<svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16" stroke-dasharray="1 3"/></svg>' +
+        '<span class="btn-label">Simplifier</span>' +
+      '</button>';
+    sectionSelection.appendChild(selActions);
     panel.appendChild(sectionSelection);
+
+    sectionSelection.querySelector('#selToleranceSlider').addEventListener('input', (e) => {
+      const val = e.target.value;
+      sectionSelection.querySelector('#selTolerance').textContent = val + 'px';
+    });
+
+    sectionSelection.querySelector('#simplifyBtn').addEventListener('click', () => {
+      const tol = parseInt(sectionSelection.querySelector('#selToleranceSlider').value, 10);
+      this.#stateMachine.simplifySelectedPath(tol);
+    });
 
     // Section Tools
     const sectionTool = document.createElement('div');

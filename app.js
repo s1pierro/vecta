@@ -100,7 +100,14 @@ class Application {
     this.#statesMachine.on('toolChange', () => this.#updateStatusBar());
     this.#statesMachine.on('colorChange', () => this.#updateStatusBar());
     this.#statesMachine.on('sizeChange', () => this.#updateStatusBar());
-    this.#statesMachine.on('selectedPathChange', () => this.#updateStatusBar());
+    this.#statesMachine.on('selectedPathChange', (path) => {
+      this.#corePanel.syncSelection(path);
+      this.#updateStatusBar();
+    });
+    this.#statesMachine.on('pathsChange', () => {
+      const path = this.#statesMachine.selectedPath;
+      if (path) this.#corePanel.syncSelection(path);
+    });
     this.#statesMachine.on('historyChange', () => this.#updateHistoryButtons());
 
     this.#updateHistoryButtons();

@@ -97,13 +97,80 @@
 .panel-section-selection {
   height: auto;
   flex: 0 0 auto;
-  padding: 6px 12px;
-  gap: 4px 12px;
+  padding: 8px 12px;
+  gap: 8px;
   display: none;
+  flex-direction: column;
 }
 
 .panel-section-selection.visible {
   display: flex;
+}
+
+.selection-info {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.selection-info > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: center;
+}
+
+.selection-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.simplify-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.simplify-control .selection-prop-label {
+  flex-shrink: 0;
+}
+
+.simplify-control .selection-prop-value {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.simplify-control input[type="range"] {
+  flex: 1;
+  width: 100%;
+  accent-color: #4fc3f7;
+}
+
+#simplifyBtn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+  cursor: pointer;
+  font-size: 11px;
+}
+
+#simplifyBtn:active {
+  background: rgba(79, 195, 247, 0.2);
+  border-color: #4fc3f7;
+}
+
+#simplifyBtn svg {
+  width: 18px;
+  height: 18px;
+  stroke: #fff;
+  fill: none;
+  stroke-width: 2;
 }
 
 .selection-prop-label {
@@ -244,8 +311,7 @@
   }
 
   .panel-section-selection {
-    flex-direction: row;
-    flex-wrap: wrap;
+    flex-direction: column;
   }
 
   .panel-section-colors {
@@ -317,8 +383,7 @@
   }
 
   .panel-section-selection {
-    flex-direction: row;
-    flex-wrap: wrap;
+    flex-direction: column;
   }
 
   .panel-section-colors {
