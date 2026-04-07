@@ -821,6 +821,11 @@ class DrawArea {
         el.setAttribute('pointer-events', 'none');
         this.#svgUI.appendChild(el);
       });
+
+      // BBox handles stored for hit detection
+      this._bboxHandleCenters = handles;
+    } else {
+      this._bboxHandleCenters = [];
     }
 
     // Node handles
@@ -1166,7 +1171,6 @@ class DrawArea {
   _handleTouchStart(e) {
     if (this._handleDragHandle) return; // already dragging
     if (this.#stateMachine.mode !== 'selection') return;
-    if (!this._handleCenters || this._handleCenters.length === 0) return;
     if (e.touches.length > 1) return; // multi-touch → let TNT handle
 
     const touch = e.touches[0];
@@ -1177,16 +1181,33 @@ class DrawArea {
     // In 'objects' mode, don't intercept any handles (bbox selection uses cursor)
     if (this.#stateMachine.selectables === 'objects') return;
 
-    // In 'nodes' mode, only match node handles (not bbox handles)
+    // In 'nodes' / 'nodeSelection' mode, check node handles first, then bbox handles
     let hit = null;
     let minDist = Infinity;
-    for (const h of this._handleCenters) {
-      if (!h.name.startsWith('node:')) continue;
-      const d = Math.hypot(sx - h.x, sy - h.y);
-      if (d < minDist) { minDist = d; hit = h; }
+
+    // Check node handles
+    if (this._handleCenters) {
+      for (const h of this._handleCenters) {
+        if (!h.name.startsWith('node:')) continue;
+        const d = Math.hypot(sx - h.x, sy - h.y);
+        if (d < minDist) { minDist = d; hit = h; }
+      }
     }
 
-    if (hit && minDist <= this._handleHitRadius * 1.5) {
+    // If no node hit, check bbox handles (only in 'nodes' mode)
+    if (!hit && this.#stateMachine.selectables === 'nodes' && this._bboxHandleCenters) {
+      const nodeRadius = 5;
+      const bboxHitRadius = nodeRadius * 2.5;
+      for (const h of this._bboxHandleCenters) {
+        const d = Math.hypot(sx - h.x, sy - h.y);
+        if (d < minDist) { minDist = d; hit = h; }
+      }
+      if (hit && minDist > bboxHitRadius * 1.5) {
+        hit = null;
+      }
+    }
+
+    if (hit) {
       e.stopPropagation();
       this._startHandleDrag(hit.name, sx, sy);
     }
