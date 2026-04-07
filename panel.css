@@ -89,8 +89,34 @@
 
 /* Tools Section */
 .panel-section-tool {
-  height: 240px;
-  flex: 0 0 240px;
+  height: auto;
+  flex: 0 0 auto;
+}
+
+/* Selection Properties Section */
+.panel-section-selection {
+  height: auto;
+  flex: 0 0 auto;
+  padding: 6px 12px;
+  gap: 4px 12px;
+  display: none;
+}
+
+.panel-section-selection.visible {
+  display: flex;
+}
+
+.selection-prop-label {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.4);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.selection-prop-value {
+  font-size: 12px;
+  color: #4fc3f7;
+  font-family: monospace;
 }
 
 /* Colors Section */
@@ -213,8 +239,13 @@
   }
 
   .panel-section-tool {
-    height: 240px;
-    flex: 0 0 240px;
+    height: auto;
+    flex: 0 0 auto;
+  }
+
+  .panel-section-selection {
+    flex-direction: row;
+    flex-wrap: wrap;
   }
 
   .panel-section-colors {
@@ -282,7 +313,12 @@
   .panel-section-tool {
     width: 100%;
     height: auto;
-    flex: 1;
+    flex: 0 0 auto;
+  }
+
+  .panel-section-selection {
+    flex-direction: row;
+    flex-wrap: wrap;
   }
 
   .panel-section-colors {

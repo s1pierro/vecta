@@ -121,6 +121,14 @@ class StateMachine {
     this.#saveState();
   }
 
+  updateSelectedPath(props) {
+    if (this.#state.selectedPath) {
+      Object.assign(this.#state.selectedPath, props);
+      this.#emit('pathsChange', this.#state.paths);
+      this.#saveState();
+    }
+  }
+
   clearCanvas() {
     this.#state.paths = [];
     this.#emit('clearCanvas');
@@ -211,6 +219,19 @@ class CorePanel {
     const sep1 = document.createElement('div');
     sep1.className = 'panel-sep';
     panel.appendChild(sep1);
+
+    // Section Selection Properties
+    const sectionSelection = document.createElement('div');
+    sectionSelection.className = 'panel-section panel-section-selection';
+    sectionSelection.id = 'panelSelection';
+    sectionSelection.innerHTML =
+      '<span class="selection-prop-label">Couleur</span>' +
+      '<span class="selection-prop-value" id="selColor"></span>' +
+      '<span class="selection-prop-label">Taille</span>' +
+      '<span class="selection-prop-value" id="selSize"></span>' +
+      '<span class="selection-prop-label">Points</span>' +
+      '<span class="selection-prop-value" id="selPoints"></span>';
+    panel.appendChild(sectionSelection);
 
     // Section Tools
     const sectionTool = document.createElement('div');
@@ -313,13 +334,41 @@ class CorePanel {
   #selectColor(color) {
     this.#el.querySelectorAll('.panel-color-btn').forEach(b => b.classList.remove('active'));
     this.#el.querySelector(`[data-color="${color}"]`).classList.add('active');
+    if (this.#stateMachine.selectedPath) {
+      this.#stateMachine.updateSelectedPath({ color });
+    }
     this.#stateMachine.currentColor = color;
   }
 
   #selectSize(size) {
     this.#el.querySelectorAll('.panel-size-btn').forEach(b => b.classList.remove('active'));
     this.#el.querySelector(`[data-size="${size}"]`).classList.add('active');
+    if (this.#stateMachine.selectedPath) {
+      this.#stateMachine.updateSelectedPath({ size });
+    }
     this.#stateMachine.currentSize = size;
+  }
+
+  syncSelection(path) {
+    const section = this.#el.querySelector('#panelSelection');
+    if (!path) {
+      section.classList.remove('visible');
+      return;
+    }
+    section.classList.add('visible');
+    const selColor = this.#el.querySelector('#selColor');
+    const selSize = this.#el.querySelector('#selSize');
+    const selPoints = this.#el.querySelector('#selPoints');
+    if (selColor) selColor.textContent = path.color;
+    if (selSize) selSize.textContent = path.size + 'px';
+    if (selPoints) selPoints.textContent = path.points ? path.points.length : 0;
+
+    this.#el.querySelectorAll('.panel-color-btn').forEach(b => b.classList.remove('active'));
+    const colorBtn = this.#el.querySelector(`[data-color="${path.color}"]`);
+    if (colorBtn) colorBtn.classList.add('active');
+    this.#el.querySelectorAll('.panel-size-btn').forEach(b => b.classList.remove('active'));
+    const sizeBtn = this.#el.querySelector(`[data-size="${path.size}"]`);
+    if (sizeBtn) sizeBtn.classList.add('active');
   }
 }
 
