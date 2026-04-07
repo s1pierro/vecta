@@ -379,7 +379,105 @@
       font-weight: bold;
       color: rgba(255, 255, 255, 0.6);
     }
-    /* GNOME2-style window list in topbar */
+    /* JsonEditCard */
+    .json-edit-card {
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 4px;
+      padding: 6px;
+      margin: 2px 0;
+    }
+    .jec-label-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 4px;
+    }
+    .jec-label {
+      color: rgba(255,255,255,0.5);
+      font-size: 0.75em;
+      font-family: 'SF Mono', monospace;
+    }
+    .jec-del-btn {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      border: none;
+      background: rgba(255,80,80,0.15);
+      color: #ff5252;
+      cursor: pointer;
+      font-size: 14px;
+      line-height: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .jec-del-btn:hover { background: rgba(255,80,80,0.3); }
+    .jec-header {
+      display: flex;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+    .jec-type-tag {
+      font-size: 0.65em;
+      color: rgba(255,255,255,0.3);
+      font-family: 'SF Mono', monospace;
+      padding: 1px 6px;
+      background: rgba(255,255,255,0.04);
+      border-radius: 3px;
+    }
+    .jec-items, .jec-keys {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .jec-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 4px;
+    }
+    .jec-idx {
+      color: rgba(255,255,255,0.3);
+      font-size: 0.7em;
+      font-family: 'SF Mono', monospace;
+      min-width: 20px;
+      padding-top: 2px;
+    }
+    .jec-key-name {
+      color: rgba(79,195,247,0.7);
+      font-size: 0.75em;
+      font-family: 'SF Mono', monospace;
+      min-width: 100px;
+      padding-top: 2px;
+    }
+    .jec-child { flex: 1; }
+    .jec-add-btn {
+      margin-top: 4px;
+      padding: 2px 8px;
+      background: rgba(105,240,174,0.1);
+      border: 1px dashed rgba(105,240,174,0.3);
+      border-radius: 3px;
+      color: #69f0ae;
+      cursor: pointer;
+      font-size: 0.65em;
+    }
+    .jec-add-btn:hover { background: rgba(105,240,174,0.2); }
+    .jec-null {
+      color: rgba(255,255,255,0.2);
+      font-size: 0.75em;
+      font-style: italic;
+    }
+    .jec-bool {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 0.8em;
+      color: rgba(255,255,255,0.6);
+      cursor: pointer;
+    }
+    .jec-bool input {
+      accent-color: #4fc3f7;
+    }
     .topbar-win-list-gnome2 {
       display: flex;
       align-items: center;
@@ -461,6 +559,7 @@
 <body>
   <script src="https://cdn.jsdelivr.net/npm/svg-path-commander/dist/index.min.js"></script>
   <script src="tnt.js"></script>
+  <script src="json-edit-card.js"></script>
   <script src="core.js"></script>
   <script src="app.js"></script>
 </body>

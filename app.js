@@ -453,34 +453,90 @@ class Application {
       sep.style.cssText = 'height:1px;background:rgba(255,255,255,0.08);width:100%;';
       body.appendChild(sep);
 
-      // State definitions editor
+      // State definitions editor using JsonEditCard
       const editorSection = document.createElement('div');
       editorSection.style.cssText = 'display:flex;flex-direction:column;gap:6px;';
       editorSection.innerHTML =
         '<div style="display:flex;align-items:center;justify-content:space-between;">' +
           '<span style="color:rgba(255,255,255,0.35);font-size:0.65em;text-transform:uppercase;letter-spacing:1px;">State Definitions</span>' +
-          '<button id="rawExportBtn" style="padding:2px 8px;background:rgba(79,195,247,0.15);border:1px solid rgba(79,195,247,0.3);border-radius:3px;color:#4fc3f7;cursor:pointer;font-size:0.65em;">Export</button>' +
-        '</div>' +
-        '<textarea id="rawStateEditor" style="width:100%;height:120px;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.1);border-radius:4px;color:rgba(255,255,255,0.7);font-family:monospace;font-size:0.7em;padding:4px;resize:vertical;"></textarea>' +
-        '<button id="rawApplyBtn" style="padding:4px 12px;background:rgba(105,240,174,0.15);border:1px solid rgba(105,240,174,0.3);border-radius:3px;color:#69f0ae;cursor:pointer;font-size:0.7em;align-self:flex-start;">Apply</button>';
+          '<div style="display:flex;gap:4px;">' +
+            '<button id="rawAddStateBtn" style="padding:2px 8px;background:rgba(105,240,174,0.15);border:1px solid rgba(105,240,174,0.3);border-radius:3px;color:#69f0ae;cursor:pointer;font-size:0.65em;">+ State</button>' +
+            '<button id="rawExportBtn" style="padding:2px 8px;background:rgba(79,195,247,0.15);border:1px solid rgba(79,195,247,0.3);border-radius:3px;color:#4fc3f7;cursor:pointer;font-size:0.65em;">Export</button>' +
+          '</div>' +
+        '</div>';
+
+      const editorContainer = document.createElement('div');
+      editorContainer.id = 'rawStateEditor';
+      editorContainer.style.cssText = 'max-height:300px;overflow-y:auto;';
+      editorSection.appendChild(editorContainer);
+
+      const applyBtn = document.createElement('button');
+      applyBtn.id = 'rawApplyBtn';
+      applyBtn.style.cssText = 'padding:4px 12px;background:rgba(105,240,174,0.15);border:1px solid rgba(105,240,174,0.3);border-radius:3px;color:#69f0ae;cursor:pointer;font-size:0.7em;align-self:flex-start;';
+      applyBtn.textContent = 'Apply Changes';
+      editorSection.appendChild(applyBtn);
       body.appendChild(editorSection);
 
-      // Wire editor
+      // Build editor cards
+      let stateCards = [];
+      const buildEditor = () => {
+        editorContainer.innerHTML = '';
+        stateCards = [];
+        const defs = this.#statesMachine.getStateDefinitions();
+        defs.forEach((def, i) => {
+          const cardRow = document.createElement('div');
+          cardRow.className = 'raw-state-card';
+          cardRow.style.cssText = 'margin-bottom:4px;';
+
+          const headerRow = document.createElement('div');
+          headerRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:2px;';
+          const nameTag = document.createElement('span');
+          nameTag.style.cssText = 'color:#4fc3f7;font-size:0.7em;font-family:monospace;font-weight:bold;';
+          nameTag.textContent = def.name;
+          const delBtn = document.createElement('button');
+          delBtn.style.cssText = 'padding:1px 6px;background:rgba(255,80,80,0.15);border:1px solid rgba(255,80,80,0.3);border-radius:3px;color:#ff5252;cursor:pointer;font-size:0.6em;';
+          delBtn.textContent = '×';
+          delBtn.addEventListener('click', () => {
+            defs.splice(i, 1);
+            this.#statesMachine.setStateDefinitions(defs);
+            buildEditor();
+          });
+          headerRow.appendChild(nameTag);
+          headerRow.appendChild(delBtn);
+          cardRow.appendChild(headerRow);
+
+          const cardDest = document.createElement('div');
+          cardRow.appendChild(cardDest);
+          editorContainer.appendChild(cardRow);
+
+          const card = new JsonEditCard(def, cardDest, { showType: true });
+          card.on('change', () => {
+            defs[i] = card.getValue();
+            this.#statesMachine.setStateDefinitions(defs);
+          });
+          stateCards.push(card);
+        });
+      };
+
+      // Wire buttons
       setTimeout(() => {
-        const editor = document.getElementById('rawStateEditor');
-        const applyBtn = document.getElementById('rawApplyBtn');
+        buildEditor();
+        const applyB = document.getElementById('rawApplyBtn');
+        const addBtn = document.getElementById('rawAddStateBtn');
         const exportBtn = document.getElementById('rawExportBtn');
-        if (editor && applyBtn) {
-          const defs = this.#statesMachine.getStateDefinitions();
-          editor.value = JSON.stringify(defs, null, 2);
-          applyBtn.addEventListener('click', () => {
-            try {
-              const newDefs = JSON.parse(editor.value);
-              this.#statesMachine.setStateDefinitions(newDefs);
-              editor.value = JSON.stringify(this.#statesMachine.getStateDefinitions(), null, 2);
-            } catch (e) {
-              editor.value = 'Error: ' + e.message;
-            }
+        if (applyB) {
+          applyB.addEventListener('click', () => {
+            const defs = stateCards.map(c => c.getValue());
+            this.#statesMachine.setStateDefinitions(defs);
+            buildEditor();
+          });
+        }
+        if (addBtn) {
+          addBtn.addEventListener('click', () => {
+            const defs = this.#statesMachine.getStateDefinitions();
+            defs.push({ name: 'newState', type: 'generic', family: '', exclusiveFields: [], priority: 0, tags: [], meta: {}, activationCondition: null, maintainCondition: null, deactivationCondition: null, onEnter: null, onExit: null, onMaintain: null });
+            this.#statesMachine.setStateDefinitions(defs);
+            buildEditor();
           });
         }
         if (exportBtn) {
