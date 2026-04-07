@@ -1056,16 +1056,15 @@ class DrawArea {
       if (this.#stateMachine.mode === 'drawingTool') {
         const pt = this.#screenToDoc(e.touchX, e.touchY);
         this.#stateMachine.currentPath = [{ x: pt.x, y: pt.y }];
+      } else if (this.#stateMachine.mode === 'selection' && this.#stateMachine.selectables === 'objects') {
+        const doc = this.#screenToDoc(e.touchX, e.touchY);
+        this._selBBoxStart = doc;
+        this._selBBoxCurrent = doc;
       } else if (this.#stateMachine.mode === 'selection') {
-        if (this.#stateMachine.selectables === 'objects') {
-          const doc = this.#screenToDoc(e.touchX, e.touchY);
-          this._selBBoxStart = doc;
-          this._selBBoxCurrent = doc;
-        } else if (this.#stateMachine.selectables === 'nodes') {
-          const doc = this.#screenToDoc(e.touchX, e.touchY);
-          this._nodeSelBBoxStart = doc;
-          this._nodeSelBBoxCurrent = doc;
-        }
+        // nodes / nodeSelection: node bbox selection
+        const doc = this.#screenToDoc(e.touchX, e.touchY);
+        this._nodeSelBBoxStart = doc;
+        this._nodeSelBBoxCurrent = doc;
       }
     });
 
@@ -1080,7 +1079,7 @@ class DrawArea {
       } else if (this.#stateMachine.mode === 'selection' && this.#stateMachine.selectables === 'objects') {
         this._selBBoxCurrent = this.#screenToDoc(e.touchX, e.touchY);
         this._redraw();
-      } else if (this.#stateMachine.mode === 'selection' && this.#stateMachine.selectables === 'nodes') {
+      } else if (this.#stateMachine.mode === 'selection') {
         this._nodeSelBBoxCurrent = this.#screenToDoc(e.touchX, e.touchY);
         this._redraw();
       }
@@ -1097,14 +1096,16 @@ class DrawArea {
           });
         }
         this.#stateMachine.currentPath = null;
-      } else if (this.#stateMachine.mode === 'selection' && this.#stateMachine.selectables === 'objects') {
-        this._selectInBBox();
-        this._selBBoxStart = null;
-        this._selBBoxCurrent = null;
-      } else if (this.#stateMachine.mode === 'selection' && this.#stateMachine.selectables === 'nodes') {
-        this._selectNodesInBBox();
-        this._nodeSelBBoxStart = null;
-        this._nodeSelBBoxCurrent = null;
+      } else if (this.#stateMachine.mode === 'selection') {
+        if (this.#stateMachine.selectables === 'objects') {
+          this._selectInBBox();
+          this._selBBoxStart = null;
+          this._selBBoxCurrent = null;
+        } else {
+          this._selectNodesInBBox();
+          this._nodeSelBBoxStart = null;
+          this._nodeSelBBoxCurrent = null;
+        }
       }
     });
     this._selBBoxStart = null;
@@ -1114,9 +1115,33 @@ class DrawArea {
 
     overlay.engine.on('tap', (e) => {
       if (this.#stateMachine.mode === 'selection') {
-        const pt = this.#screenToDoc(e.x, e.y);
-        const found = this._findPathAtPoint(pt.x, pt.y);
-        this.#stateMachine.selectedPath = found || null;
+        if (this.#stateMachine.selectables === 'objects') {
+          const pt = this.#screenToDoc(e.x, e.y);
+          const found = this._findPathAtPoint(pt.x, pt.y);
+          this.#stateMachine.selectedPath = found || null;
+        } else {
+          // nodes/nodeSelection mode: select/deselect individual node by tap
+          const sx = e.x;
+          const sy = e.y;
+          let hitNode = null;
+          let minDist = Infinity;
+          if (this._handleCenters) {
+            for (const h of this._handleCenters) {
+              const d = Math.hypot(sx - h.x, sy - h.y);
+              if (d < minDist) { minDist = d; hitNode = h; }
+            }
+          }
+          if (hitNode && hitNode.name.startsWith('node:')) {
+            const idx = parseInt(hitNode.name.split(':')[1], 10);
+            const nodes = this.#stateMachine.selectedNodes;
+            const i = nodes.indexOf(idx);
+            if (i >= 0) nodes.splice(i, 1);
+            else nodes.push(idx);
+            this.#stateMachine.selectedNodes = [...nodes];
+          } else {
+            this.#stateMachine.selectedNodes = [];
+          }
+        }
       }
     });
 
@@ -1165,6 +1190,8 @@ class DrawArea {
     this._pinchLastScale = 1;
 
     // Handle hit detection via overlay touch (capture phase, before TNT)
+    // Only used in 'nodeSelection' mode for dragging selected node handles.
+    // In 'nodes' mode, TNT cursor events handle bbox selection.
     this._handleTouchStart = this._handleTouchStart.bind(this);
     this.#touchOverlay.addEventListener('touchstart', this._handleTouchStart, { passive: false, capture: true });
   }
@@ -1174,41 +1201,23 @@ class DrawArea {
     if (this.#stateMachine.mode !== 'selection') return;
     if (e.touches.length > 1) return; // multi-touch → let TNT handle
 
+    // Only intercept in 'nodeSelection' mode (nodes already selected).
+    // In 'nodes' mode, let TNT cursor events handle bbox selection.
+    if (this.#stateMachine.selectables !== 'nodeSelection') return;
+
     const touch = e.touches[0];
     const rect = this.#el.getBoundingClientRect();
     const sx = touch.clientX - rect.left;
     const sy = touch.clientY - rect.top;
 
-    // In 'objects' mode, don't intercept any handles (bbox selection uses cursor)
-    if (this.#stateMachine.selectables === 'objects') return;
-
-    // In 'nodes' / 'nodeSelection' mode, check node handles first, then bbox handles
     let hit = null;
     let minDist = Infinity;
-
-    // Check node handles
-    if (this._handleCenters) {
-      for (const h of this._handleCenters) {
-        if (!h.name.startsWith('node:')) continue;
-        const d = Math.hypot(sx - h.x, sy - h.y);
-        if (d < minDist) { minDist = d; hit = h; }
-      }
+    for (const h of this._handleCenters) {
+      const d = Math.hypot(sx - h.x, sy - h.y);
+      if (d < minDist) { minDist = d; hit = h; }
     }
 
-    // If no node hit, check bbox handles (only in 'nodes' mode)
-    if (!hit && this.#stateMachine.selectables === 'nodes' && this._bboxHandleCenters) {
-      const nodeRadius = 5;
-      const bboxHitRadius = nodeRadius * 2.5;
-      for (const h of this._bboxHandleCenters) {
-        const d = Math.hypot(sx - h.x, sy - h.y);
-        if (d < minDist) { minDist = d; hit = h; }
-      }
-      if (hit && minDist > bboxHitRadius * 1.5) {
-        hit = null;
-      }
-    }
-
-    if (hit) {
+    if (hit && minDist <= this._handleHitRadius * 1.5) {
       e.stopPropagation();
       this._startHandleDrag(hit.name, sx, sy);
     }
