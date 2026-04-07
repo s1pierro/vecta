@@ -609,18 +609,71 @@ class Application {
     // Size selector SubWindow
     const sizeContentFn = () => {
       const body = document.createElement('div');
-      body.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;justify-content:center;';
-      const sizeList = [2, 4, 8, 16];
-      sizeList.forEach((size, i) => {
-        const btn = document.createElement('button');
-        btn.className = 'panel-size-btn' + (i === 2 ? ' active' : '');
-        btn.dataset.size = size;
-        btn.style.cssText = `width:${size + 8}px;height:${size + 8}px;border-radius:50%;background:rgba(255,255,255,0.1);border:2px solid rgba(255,255,255,0.3);cursor:pointer;`;
-        btn.addEventListener('click', () => {
+      body.className = 'size-selector-container';
+      body.style.cssText = 'display:flex;flex-direction:column;gap:12px;padding:12px;';
+
+      const sizes = [2, 4, 6, 8, 10, 14, 20, 28];
+      const minSize = sizes[0];
+      const maxSize = sizes[sizes.length - 1];
+
+      // Value display
+      const valueDisplay = document.createElement('div');
+      valueDisplay.className = 'size-value-display';
+      valueDisplay.style.cssText = 'text-align:center;font-size:0.8em;color:#4fc3f7;font-family:monospace;';
+      valueDisplay.textContent = this.#statesMachine.currentSize + 'px';
+      body.appendChild(valueDisplay);
+
+      // Slider track
+      const track = document.createElement('div');
+      track.className = 'size-track';
+      track.style.cssText = 'position:relative;height:40px;display:flex;align-items:center;';
+
+      // Tick marks + circles
+      sizes.forEach((size) => {
+        const pct = ((size - minSize) / (maxSize - minSize)) * 100;
+        const tick = document.createElement('div');
+        tick.className = 'size-tick';
+        tick.style.cssText = `position:absolute;left:${pct}%;display:flex;flex-direction:column;align-items:center;transform:translateX(-50%);`;
+
+        // Tick line
+        const line = document.createElement('div');
+        line.style.cssText = 'width:1px;height:6px;background:rgba(255,255,255,0.2);';
+        tick.appendChild(line);
+
+        // Size circle
+        const circle = document.createElement('div');
+        circle.className = 'size-circle' + (this.#statesMachine.currentSize === size ? ' active' : '');
+        circle.dataset.size = size;
+        const circleSize = Math.max(size, 6);
+        circle.style.cssText = `width:${circleSize + 4}px;height:${circleSize + 4}px;border-radius:50%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);cursor:pointer;transition:all 0.15s;`;
+        circle.addEventListener('click', () => {
           this.#corePanel.selectSize(size);
         });
-        body.appendChild(btn);
+        tick.appendChild(circle);
+
+        track.appendChild(tick);
       });
+
+      // Slider thumb
+      const thumb = document.createElement('div');
+      thumb.className = 'size-thumb';
+      const thumbPct = ((this.#statesMachine.currentSize - minSize) / (maxSize - minSize)) * 100;
+      thumb.style.cssText = `position:absolute;left:${thumbPct}%;top:50%;width:14px;height:14px;border-radius:50%;background:#4fc3f7;border:2px solid #fff;transform:translate(-50%,-50%);cursor:pointer;transition:left 0.2s;z-index:2;`;
+      track.appendChild(thumb);
+
+      body.appendChild(track);
+
+      // Subscribe to size changes
+      this.#statesMachine.on('sizeChange', (sz) => {
+        valueDisplay.textContent = sz + 'px';
+        const newPct = ((sz - minSize) / (maxSize - minSize)) * 100;
+        thumb.style.left = newPct + '%';
+        // Update circles
+        body.querySelectorAll('.size-circle').forEach(c => c.classList.remove('active'));
+        const activeCircle = body.querySelector(`.size-circle[data-size="${sz}"]`);
+        if (activeCircle) activeCircle.classList.add('active');
+      });
+
       return body;
     };
     this.#subWindowManager.addWindow('sizeSelector', {
