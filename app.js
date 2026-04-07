@@ -459,10 +459,7 @@ class Application {
       editorSection.innerHTML =
         '<div style="display:flex;align-items:center;justify-content:space-between;">' +
           '<span style="color:rgba(255,255,255,0.35);font-size:0.65em;text-transform:uppercase;letter-spacing:1px;">State Definitions</span>' +
-          '<div style="display:flex;gap:4px;">' +
-            '<button id="rawAddStateBtn" style="padding:2px 8px;background:rgba(105,240,174,0.15);border:1px solid rgba(105,240,174,0.3);border-radius:3px;color:#69f0ae;cursor:pointer;font-size:0.65em;">+ State</button>' +
-            '<button id="rawExportBtn" style="padding:2px 8px;background:rgba(79,195,247,0.15);border:1px solid rgba(79,195,247,0.3);border-radius:3px;color:#4fc3f7;cursor:pointer;font-size:0.65em;">Export</button>' +
-          '</div>' +
+          '<button id="rawExportBtn" style="padding:2px 8px;background:rgba(79,195,247,0.15);border:1px solid rgba(79,195,247,0.3);border-radius:3px;color:#4fc3f7;cursor:pointer;font-size:0.65em;">Export</button>' +
         '</div>';
 
       const editorContainer = document.createElement('div');
@@ -526,13 +523,26 @@ class Application {
           });
           stateCards.push(card);
         });
+
+        // Add state button at bottom of editor
+        const addCardBtn = document.createElement('button');
+        addCardBtn.className = 'raw-add-state-btn';
+        addCardBtn.style.cssText = 'display:block;width:100%;padding:6px;margin-top:4px;background:rgba(105,240,174,0.08);border:1px dashed rgba(105,240,174,0.25);border-radius:4px;color:#69f0ae;cursor:pointer;font-size:0.7em;font-family:monospace;';
+        addCardBtn.textContent = '+ Add State';
+        addCardBtn.addEventListener('click', () => {
+          const d = this.#statesMachine.getStateDefinitions();
+          d.push({ name: 'newState', type: 'generic', family: '', exclusiveFields: [], priority: 0, tags: [], meta: {}, activationCondition: null, maintainCondition: null, deactivationCondition: null, onEnter: null, onExit: null, onMaintain: null });
+          this.#statesMachine.setStateDefinitions(d);
+          buildEditor();
+        });
+        editorContainer.appendChild(addCardBtn);
       };
 
       // Wire buttons
       setTimeout(() => {
         buildEditor();
         const applyB = document.getElementById('rawApplyBtn');
-        const addBtn = document.getElementById('rawAddStateBtn');
+        const resetB = document.getElementById('rawResetBtn');
         const exportBtn = document.getElementById('rawExportBtn');
         if (applyB) {
           applyB.addEventListener('click', () => {
@@ -541,18 +551,6 @@ class Application {
             buildEditor();
           });
         }
-        if (addBtn) {
-          addBtn.addEventListener('click', () => {
-            const defs = this.#statesMachine.getStateDefinitions();
-            defs.push({ name: 'newState', type: 'generic', family: '', exclusiveFields: [], priority: 0, tags: [], meta: {}, activationCondition: null, maintainCondition: null, deactivationCondition: null, onEnter: null, onExit: null, onMaintain: null });
-            this.#statesMachine.setStateDefinitions(defs);
-            buildEditor();
-          });
-        }
-        if (exportBtn) {
-          exportBtn.addEventListener('click', () => StateLoader.export());
-        }
-        const resetB = document.getElementById('rawResetBtn');
         if (resetB) {
           resetB.addEventListener('click', async () => {
             try {
@@ -563,6 +561,9 @@ class Application {
               console.error('Reset failed:', e);
             }
           });
+        }
+        if (exportBtn) {
+          exportBtn.addEventListener('click', () => StateLoader.export());
         }
       }, 0);
 
