@@ -4,6 +4,8 @@
 
 🌐 **[Open App](https://s1pierro.github.io/vecta/)**
 
+![Vecta screenshot](vecta.png)
+
 ## Features
 
 - **Drawing** — freehand paths with Douglas-Peucker simplification (tolerance slider)
