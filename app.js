@@ -626,7 +626,7 @@ class Application {
       // Slider track
       const track = document.createElement('div');
       track.className = 'size-track';
-      track.style.cssText = 'position:relative;height:40px;display:flex;align-items:center;';
+      track.style.cssText = 'position:relative;height:50px;display:flex;align-items:center;width:100%;';
 
       // Tick marks + circles
       sizes.forEach((size) => {
@@ -682,7 +682,7 @@ class Application {
       content: sizeContentFn,
       left: '70vw',
       top: '10vh',
-      width: '150px',
+      width: 'auto',
       height: 'auto'
     });
 
