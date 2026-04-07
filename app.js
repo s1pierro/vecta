@@ -474,7 +474,17 @@ class Application {
       applyBtn.id = 'rawApplyBtn';
       applyBtn.style.cssText = 'padding:4px 12px;background:rgba(105,240,174,0.15);border:1px solid rgba(105,240,174,0.3);border-radius:3px;color:#69f0ae;cursor:pointer;font-size:0.7em;align-self:flex-start;';
       applyBtn.textContent = 'Apply Changes';
-      editorSection.appendChild(applyBtn);
+
+      const resetBtn = document.createElement('button');
+      resetBtn.id = 'rawResetBtn';
+      resetBtn.style.cssText = 'padding:4px 12px;background:rgba(255,80,80,0.15);border:1px solid rgba(255,80,80,0.3);border-radius:3px;color:#ff5252;cursor:pointer;font-size:0.7em;align-self:flex-start;';
+      resetBtn.textContent = 'Reset Defaults';
+
+      const btnRow = document.createElement('div');
+      btnRow.style.cssText = 'display:flex;gap:6px;align-items:center;';
+      btnRow.appendChild(applyBtn);
+      btnRow.appendChild(resetBtn);
+      editorSection.appendChild(btnRow);
       body.appendChild(editorSection);
 
       // Build editor cards
@@ -541,6 +551,18 @@ class Application {
         }
         if (exportBtn) {
           exportBtn.addEventListener('click', () => StateLoader.export());
+        }
+        const resetB = document.getElementById('rawResetBtn');
+        if (resetB) {
+          resetB.addEventListener('click', async () => {
+            try {
+              const defaults = await StateLoader.fetchDefaults();
+              this.#statesMachine.setStateDefinitions(defaults);
+              buildEditor();
+            } catch (e) {
+              console.error('Reset failed:', e);
+            }
+          });
         }
       }, 0);
 

@@ -312,16 +312,37 @@ class JsonEditCard {
 
     container.appendChild(keys);
 
-    // Add button for objects (even empty ones)
+    // Add key row: input + button
+    const addRow = document.createElement('div');
+    addRow.className = 'jec-add-row';
+
+    const keyInput = document.createElement('input');
+    keyInput.type = 'text';
+    keyInput.placeholder = 'key name';
+    keyInput.className = 'jec-key-input';
+    keyInput.style.cssText = 'flex:1;background:transparent;border:1px dashed rgba(255,255,255,0.2);border-radius:3px;padding:2px 6px;color:inherit;font-size:0.75em;font-family:monospace;';
+
     const addBtn = document.createElement('button');
     addBtn.className = 'jec-add-btn';
-    addBtn.textContent = '+ key';
-    addBtn.addEventListener('click', () => {
-      const key = `key${Object.keys(obj).length}`;
-      obj[key] = null;
+    addBtn.textContent = '+';
+
+    const doAdd = () => {
+      const name = keyInput.value.trim();
+      if (!name) return;
+      if (obj.hasOwnProperty(name)) return; // key already exists
+      obj[name] = null;
+      keyInput.value = '';
       this.#emit(obj);
+    };
+
+    addBtn.addEventListener('click', doAdd);
+    keyInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') doAdd();
     });
-    container.appendChild(addBtn);
+
+    addRow.appendChild(keyInput);
+    addRow.appendChild(addBtn);
+    container.appendChild(addRow);
 
     return container;
   }
