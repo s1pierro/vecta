@@ -124,6 +124,50 @@
       align-content: flex-start;
       gap: 8px;
     }
+
+    /* Raw state chips — generic styles (work in #rawStatesModal AND .sub-window) */
+    .raw-state-group {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 3px;
+      padding: 4px 6px;
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 4px;
+    }
+    .raw-label {
+      color: rgba(255, 255, 255, 0.35);
+      text-transform: uppercase;
+      font-size: 0.75em;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      letter-spacing: 0.5px;
+      margin-right: 2px;
+    }
+    .raw-chip {
+      padding: 1px 6px;
+      border-radius: 3px;
+      background: rgba(255, 255, 255, 0.06);
+      color: rgba(255, 255, 255, 0.3);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      transition: all 0.1s ease;
+      white-space: nowrap;
+      font-size: 0.65em;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+    }
+    .raw-chip.active {
+      background: rgba(105, 240, 174, 0.18);
+      color: #69f0ae;
+      border-color: #69f0ae;
+      box-shadow: 0 0 6px rgba(105, 240, 174, 0.25);
+    }
+    .raw-chip.raw-toggle.active {
+      background: rgba(255, 183, 77, 0.18);
+      color: #ffb74d;
+      border-color: #ffb74d;
+      box-shadow: 0 0 6px rgba(255, 183, 77, 0.25);
+    }
+
+    /* Legacy scoped selectors for backward compat */
     #rawStatesModal .raw-state-group {
       display: flex;
       flex-wrap: wrap;
