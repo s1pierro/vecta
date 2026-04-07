@@ -2,7 +2,7 @@
   "name": "Vecta",
   "short_name": "Vecta",
   "description": "Application de dessin vectoriel",
-  "start_url": "/",
+  "start_url": "/vecta/",
   "display": "standalone",
   "background_color": "#1a1a2e",
   "theme_color": "#1a1a2e",
