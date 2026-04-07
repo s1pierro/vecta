@@ -546,10 +546,11 @@ class DrawArea {
    * Zoome autour d'un point document (px, py) avec le facteur donné.
    */
   #zoomAt(px, py, factor) {
-    const newZoom = Math.min(10, Math.max(0.1, this.#zoom * factor));
-    const scale = newZoom / this.#zoom;
-    this.#panX = px - (px - this.#panX) * scale;
-    this.#panY = py - (py - this.#panY) * scale;
+    const oldZoom = this.#zoom;
+    const newZoom = Math.min(10, Math.max(0.1, oldZoom * factor));
+    const s = newZoom / oldZoom;
+    this.#panX = px - (px - this.#panX) * s;
+    this.#panY = py - (py - this.#panY) * s;
     this.#zoom = newZoom;
     this.#applyTransform();
   }
@@ -715,5 +716,25 @@ class DrawArea {
     overlay.engine.on('catchDrop', () => {
       this._lastCatchDocPos = null;
     });
+
+    // Zoom via pinch (2-finger gesture)
+    overlay.engine.on('pinchStart', (e) => {
+      const cx = (e.x1 + e.x2) / 2;
+      const cy = (e.y1 + e.y2) / 2;
+      const doc = this.#screenToDoc(cx, cy);
+      this._pinchDocCenter = doc;
+    });
+    overlay.engine.on('pinchChange', (e) => {
+      if (this._pinchDocCenter) {
+        this.#zoomAt(this._pinchDocCenter.x, this._pinchDocCenter.y, e.scale / this._pinchLastScale);
+      }
+      this._pinchLastScale = e.scale;
+    });
+    overlay.engine.on('pinchEnd', () => {
+      this._pinchDocCenter = null;
+      this._pinchLastScale = 1;
+    });
+    this._pinchDocCenter = null;
+    this._pinchLastScale = 1;
   }
 }
