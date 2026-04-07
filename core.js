@@ -2,6 +2,373 @@ const APP_NAME = 'Vecta';
 const APP_VERSION = '0.1';
 
 /**
+ * Selection types — what kind of entity is being selected.
+ */
+const SelectionType = Object.freeze({
+  OBJECT: 'object',          // whole path selection
+  NODE: 'node',              // individual node(s) on a path
+  NODE_HANDLE: 'nodeHandle', // control point handle (cpIn/cpOut)
+  BOX: 'box'                 // rectangular marquee selection
+});
+
+/**
+ * Selection states — fine-grained lifecycle states.
+ */
+const SelectionState = Object.freeze({
+  IDLE: 'idle',
+  PATH_SELECTED: 'pathSelected',
+  NODES_SELECTED: 'nodesSelected',
+  HANDLE_DRAGGING: 'handleDragging',
+  BOX_DRAGGING: 'boxDragging'
+});
+
+/**
+ * Selection modes — what kind of entity we're targeting.
+ */
+const SelectMode = Object.freeze({
+  OBJECT: 'object',  // select whole objects (paths, shapes, text)
+  NODE: 'node'       // select nodes on the active path
+});
+
+/**
+ * SelectionManager — centralized selection state management.
+ *
+ * Responsible for:
+ * - Typed selections (path, node, handle, box)
+ * - Fine-grained selection states
+ * - Event emission for interested parties
+ * - Synchronizing with StateMachine's selectedPath/selectedNodes
+ *
+ * Acts as the single point of contact between selection UI
+ * (DrawArea, CorePanel) and the application state machine.
+ */
+class SelectionManager {
+  #stateMachine;
+  #listeners = {};
+
+  // Current selection data
+  #type = SelectionType.OBJECT;
+  #state = SelectionState.IDLE;
+  #selectMode = SelectMode.OBJECT;
+  #selectedPath = null;   // currently selected path (object mode) OR active path (node mode)
+  #selectedNodes = [];
+  #boxRect = null;       // {x, y, w, h} in screen coords during box drag
+  #dragHandle = null;    // {name, screenX, screenY} during handle drag
+
+  constructor(stateMachine) {
+    this.#stateMachine = stateMachine;
+    this.#wireToStateMachine();
+  }
+
+  // ─── Getters ───────────────────────────────────────────
+
+  get type() { return this.#type; }
+  get state() { return this.#state; }
+  get selectMode() { return this.#selectMode; }
+  get selectedPath() { return this.#selectedPath; }
+  get selectedNodes() { return [...this.#selectedNodes]; }
+  get boxRect() { return this.#boxRect ? { ...this.#boxRect } : null; }
+  get dragHandle() { return this.#dragHandle ? { ...this.#dragHandle } : null; }
+
+  get hasSelection() { return !!this.#selectedPath || this.#selectedNodes.length > 0; }
+  get hasNodes() { return this.#selectedNodes.length > 0; }
+
+  /**
+   * Set the selection mode: 'object' or 'node'.
+   * In 'object' mode: tap toggles whole paths, bbox adds objects.
+   * In 'node' mode: one path is "active", tap toggles nodes, bbox adds nodes.
+   * Switching to 'node' without an active path will auto-select the first
+   * tapped object as the active path.
+   * @param {string} mode - SelectMode.OBJECT or SelectMode.NODE
+   */
+  setSelectMode(mode) {
+    if (mode === this.#selectMode) return;
+    this.#selectMode = mode;
+    // When switching away from node mode, clear node selection
+    if (mode === SelectMode.OBJECT) {
+      this.#selectedNodes = [];
+      this.#setState(this.#selectedPath ? SelectionState.PATH_SELECTED : SelectionState.IDLE);
+      this.#type = SelectionType.OBJECT;
+    } else {
+      // Switching to node mode — keep selectedPath as active path
+      this.#setState(this.#selectedPath ? SelectionState.NODES_SELECTED : SelectionState.PATH_SELECTED);
+    }
+    this.#emit('selectModeChange', { mode: this.#selectMode });
+    this.#emitSelectionChange();
+  }
+
+  // ─── Event system ──────────────────────────────────────
+
+  on(event, callback) {
+    if (!this.#listeners[event]) this.#listeners[event] = [];
+    this.#listeners[event].push(callback);
+  }
+
+  off(event, callback) {
+    if (!this.#listeners[event]) return;
+    this.#listeners[event] = this.#listeners[event].filter(cb => cb !== callback);
+  }
+
+  #emit(event, data) {
+    if (this.#listeners[event]) {
+      this.#listeners[event].forEach(cb => cb(data));
+    }
+  }
+
+  // ─── Path selection ────────────────────────────────────
+
+  /**
+   * Select an entire path object.
+   * In 'object' mode: adds/toggles the path in selection.
+   * In 'node' mode: sets the active path and clears previous node selection.
+   * @param {object|null} path - The path to select, or null to deselect.
+   */
+  selectPath(path) {
+    if (this.#selectedPath === path) return; // no-op
+
+    const prev = this.#selectedPath;
+
+    if (this.#selectMode === SelectMode.NODE) {
+      // Node mode: switching active path
+      this.#selectedPath = path;
+      this.#selectedNodes = []; // clear nodes when switching active path
+      if (path) {
+        this.#type = SelectionType.OBJECT; // temporarily object until nodes selected
+        this.#setState(SelectionState.PATH_SELECTED);
+        this.#emit('pathSelected', { path });
+      } else {
+        this.#setState(SelectionState.IDLE);
+        if (prev) this.#emit('pathDeselected', { path: prev });
+      }
+    } else {
+      // Object mode: standard selection
+      this.#selectedPath = path;
+      this.#selectedNodes = [];
+
+      if (path) {
+        this.#type = SelectionType.OBJECT;
+        this.#setState(SelectionState.PATH_SELECTED);
+        this.#emit('pathSelected', { path });
+      } else if (prev) {
+        this.#setState(SelectionState.IDLE);
+        this.#emit('pathDeselected', { path: prev });
+      }
+    }
+
+    this.#syncToStateMachine();
+    this.#emitSelectionChange();
+  }
+
+  /**
+   * Toggle a path in/out of the current selection (object mode only).
+   * Additive: if already selected, deselect it; otherwise add to selection.
+   * @param {object} path
+   */
+  togglePath(path) {
+    if (this.#selectMode !== SelectMode.OBJECT) return;
+    if (this.#selectedPath === path) {
+      this.selectPath(null);
+    } else {
+      this.selectPath(path);
+    }
+  }
+
+  /**
+   * Select multiple nodes on the current path by index.
+   * Replaces the current node selection.
+   * @param {number[]} indices - Array of point indices.
+   */
+  selectNodes(indices) {
+    const sorted = [...new Set(indices)].sort((a, b) => a - b);
+    if (this.#arraysEqual(this.#selectedNodes, sorted)) return;
+
+    this.#selectedNodes = sorted;
+
+    if (sorted.length > 0) {
+      this.#type = SelectionType.NODE;
+      this.#setState(SelectionState.NODES_SELECTED);
+      this.#emit('nodesSelected', { path: this.#selectedPath, nodes: sorted });
+    } else {
+      this.#type = SelectionType.OBJECT;
+      this.#setState(this.#selectedPath ? SelectionState.PATH_SELECTED : SelectionState.IDLE);
+      this.#emit('nodesDeselected', { path: this.#selectedPath });
+    }
+
+    this.#syncToStateMachine();
+    this.#emitSelectionChange();
+  }
+
+  /**
+   * Toggle a single node in/out of the selection.
+   * @param {number} index - Point index to toggle.
+   */
+  toggleNode(index) {
+    if (!this.#selectedPath) return;
+    const idx = this.#selectedNodes.indexOf(index);
+    if (idx >= 0) {
+      this.#selectedNodes.splice(idx, 1);
+    } else {
+      this.#selectedNodes.push(index);
+    }
+    this.selectNodes(this.#selectedNodes);
+  }
+
+  /**
+   * Add nodes to the current selection (union).
+   * @param {number[]} indices
+   */
+  addNodes(indices) {
+    const set = new Set([...this.#selectedNodes, ...indices]);
+    this.selectNodes([...set]);
+  }
+
+  // ─── Handle drag (control point manipulation) ──────────
+
+  startHandleDrag(handleInfo) {
+    this.#dragHandle = handleInfo;
+    this.#type = SelectionType.NODE_HANDLE;
+    this.#setState(SelectionState.HANDLE_DRAGGING);
+    this.#emit('handleDragStart', { handle: handleInfo, path: this.#selectedPath, nodes: this.#selectedNodes });
+    this.#emitSelectionChange();
+  }
+
+  handleDrag(handleInfo) {
+    if (!this.#dragHandle) return;
+    this.#dragHandle = handleInfo;
+    this.#emit('handleDrag', { handle: handleInfo, path: this.#selectedPath, nodes: this.#selectedNodes });
+  }
+
+  endHandleDrag() {
+    if (!this.#dragHandle) return;
+    const handle = this.#dragHandle;
+    this.#dragHandle = null;
+    // Return to previous state
+    if (this.#selectedNodes.length > 0) {
+      this.#type = SelectionType.NODE;
+      this.#setState(SelectionState.NODES_SELECTED);
+    } else if (this.#selectedPath) {
+      this.#type = SelectionType.OBJECT;
+      this.#setState(SelectionState.PATH_SELECTED);
+    } else {
+      this.#setState(SelectionState.IDLE);
+    }
+    this.#emit('handleDragEnd', { handle, path: this.#selectedPath, nodes: this.#selectedNodes });
+    this.#emitSelectionChange();
+  }
+
+  // ─── Box selection ─────────────────────────────────────
+
+  startBox(rect) {
+    this.#boxRect = { ...rect };
+    this.#type = SelectionType.BOX;
+    this.#setState(SelectionState.BOX_DRAGGING);
+    this.#emit('boxStart', { rect: this.#boxRect });
+    this.#emitSelectionChange();
+  }
+
+  updateBox(rect) {
+    if (!this.#boxRect) return;
+    this.#boxRect = { ...rect };
+    this.#emit('boxChange', { rect: this.#boxRect });
+  }
+
+  endBox(rect, foundPathOrNodes) {
+    this.#boxRect = null;
+    this.#type = SelectionType.BOX;
+    this.#setState(SelectionState.BOX_DRAGGING);
+
+    if (foundPathOrNodes !== undefined && foundPathOrNodes !== null) {
+      if (Array.isArray(foundPathOrNodes)) {
+        // Array of node indices
+        this.selectNodes(foundPathOrNodes);
+      } else {
+        // Single path object
+        this.selectPath(foundPathOrNodes);
+      }
+    }
+
+    this.#emit('boxEnd', { rect, selection: foundPathOrNodes });
+    this.#emitSelectionChange();
+  }
+
+  // ─── Clear ─────────────────────────────────────────────
+
+  clear() {
+    const hadPath = !!this.#selectedPath;
+    const hadNodes = this.#selectedNodes.length > 0;
+    this.#selectedPath = null;
+    this.#selectedNodes = [];
+    this.#boxRect = null;
+    this.#dragHandle = null;
+    this.#type = SelectionType.OBJECT;
+    this.#setState(SelectionState.IDLE);
+
+    if (hadNodes) this.#emit('nodesDeselected', {});
+    if (hadPath) this.#emit('pathDeselected', {});
+    this.#syncToStateMachine();
+    this.#emitSelectionChange();
+  }
+
+  // ─── Internal helpers ──────────────────────────────────
+
+  #setState(newState) {
+    if (this.#state !== newState) {
+      this.#state = newState;
+      this.#emit('stateChange', newState);
+    }
+  }
+
+  #emitSelectionChange() {
+    this.#emit('selectionChange', {
+      type: this.#type,
+      state: this.#state,
+      path: this.#selectedPath,
+      nodes: [...this.#selectedNodes]
+    });
+  }
+
+  #syncToStateMachine() {
+    // Update StateMachine's internal state directly to avoid circular calls.
+    // We bypass the setters and write straight to the private #state object
+    // (via public properties since we can't access #state from here).
+    // The clean way: emit events directly on StateMachine so listeners react.
+    const sm = this.#stateMachine;
+    // We need direct state access — store references, not via setters
+    sm._setSelectedPathDirect(this.#selectedPath);
+    sm._setSelectedNodesDirect([...this.#selectedNodes]);
+  }
+
+  #wireToStateMachine() {
+    // When StateMachine mode changes away from selection, clear selection
+    this.#stateMachine.on('modeChange', (mode) => {
+      if (mode !== 'selection') {
+        this.clear();
+      }
+    });
+
+    // When paths are cleared/reset, clear selection
+    this.#stateMachine.on('clearCanvas', () => {
+      this.clear();
+    });
+
+    // When a path is deleted from the paths array, deselect if it was selected
+    this.#stateMachine.on('pathsChange', (paths) => {
+      if (this.#selectedPath && !paths.includes(this.#selectedPath)) {
+        this.clear();
+      }
+    });
+  }
+
+  #arraysEqual(a, b) {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+      if (a[i] !== b[i]) return false;
+    }
+    return true;
+  }
+}
+
+/**
  * Distance perpendiculaire d'un point à un segment.
  */
 function perpendicularDistance(point, lineStart, lineEnd) {
@@ -47,6 +414,7 @@ class StateMachine {
   #history = [];
   #historyIndex = -1;
   #maxHistory = 50;
+  #selectionManager = null;
 
   constructor() {
     this.#state = {
@@ -58,10 +426,45 @@ class StateMachine {
       currentPath: null,
       selectedPath: null,
       selectables: 'objects',
-      selectedNodes: []
+      selectedNodes: [],
+      selectMode: 'object'  // 'object' | 'node'
     };
     this.#listeners = {};
     this.#saveState();
+  }
+
+  /**
+   * Attach a SelectionManager to this state machine.
+   * Once attached, selection-related setters delegate to it.
+   * @param {SelectionManager} manager
+   */
+  setSelectionManager(manager) {
+    this.#selectionManager = manager;
+  }
+
+  get selectionManager() { return this.#selectionManager; }
+
+  /**
+   * Internal: set selectedPath directly without triggering SelectionManager.
+   * Used by SelectionManager to sync back without circular calls.
+   */
+  _setSelectedPathDirect(v) {
+    this.#state.selectedPath = v;
+    this.#state.selectedNodes = v ? [] : [];
+    this.#state.selectables = v ? 'nodes' : 'objects';
+    this.#emit('selectedNodesChange', this.#state.selectedNodes);
+    this.#emit('selectablesChange', this.#state.selectables);
+    this.#emit('selectedPathChange', v);
+  }
+
+  /**
+   * Internal: set selectedNodes directly without triggering SelectionManager.
+   */
+  _setSelectedNodesDirect(v) {
+    this.#state.selectedNodes = v || [];
+    this.#state.selectables = this.#state.selectedNodes.length > 0 ? 'nodeSelection' : 'nodes';
+    this.#emit('selectedNodesChange', this.#state.selectedNodes);
+    this.#emit('selectablesChange', this.#state.selectables);
   }
 
   get state() {
@@ -88,28 +491,74 @@ class StateMachine {
   get currentPath() { return this.#state.currentPath; }
   set currentPath(v) { this.#state.currentPath = v; this.#emit('currentPathChange', v); }
 
-  get selectedPath() { return this.#state.selectedPath; }
+  get selectedPath() {
+    return this.#selectionManager
+      ? this.#selectionManager.selectedPath
+      : this.#state.selectedPath;
+  }
   set selectedPath(v) {
-    this.#state.selectedPath = v;
-    this.#state.selectedNodes = v ? [] : [];
-    this.#state.selectables = v ? 'nodes' : 'objects';
-    this.#emit('selectedNodesChange', this.#state.selectedNodes);
-    this.#emit('selectablesChange', this.#state.selectables);
-    this.#emit('selectedPathChange', v);
+    if (this.#selectionManager) {
+      this.#selectionManager.selectPath(v);
+    } else {
+      this.#state.selectedPath = v;
+      this.#state.selectedNodes = v ? [] : [];
+      this.#state.selectables = v ? 'nodes' : 'objects';
+      this.#emit('selectedNodesChange', this.#state.selectedNodes);
+      this.#emit('selectablesChange', this.#state.selectables);
+      this.#emit('selectedPathChange', v);
+    }
   }
 
-  get selectedNodes() { return this.#state.selectedNodes; }
+  get selectedNodes() {
+    return this.#selectionManager
+      ? this.#selectionManager.selectedNodes
+      : this.#state.selectedNodes;
+  }
   set selectedNodes(v) {
-    this.#state.selectedNodes = v || [];
-    this.#state.selectables = this.#state.selectedNodes.length > 0 ? 'nodeSelection' : 'nodes';
-    this.#emit('selectedNodesChange', this.#state.selectedNodes);
-    this.#emit('selectablesChange', this.#state.selectables);
+    if (this.#selectionManager) {
+      this.#selectionManager.selectNodes(v || []);
+    } else {
+      this.#state.selectedNodes = v || [];
+      this.#state.selectables = this.#state.selectedNodes.length > 0 ? 'nodeSelection' : 'nodes';
+      this.#emit('selectedNodesChange', this.#state.selectedNodes);
+      this.#emit('selectablesChange', this.#state.selectables);
+    }
   }
 
-  get selectables() { return this.#state.selectables; }
+  get selectables() {
+    // Derived from SelectionManager state when available
+    if (this.#selectionManager) {
+      const sm = this.#selectionManager;
+      // In node mode, always return node-related value
+      if (sm.selectMode === SelectMode.NODE) {
+        return sm.hasNodes ? 'nodeSelection' : 'nodes';
+      }
+      // Object mode
+      if (sm.state === SelectionState.NODES_SELECTED || sm.state === SelectionState.HANDLE_DRAGGING) return 'nodeSelection';
+      if (sm.selectedPath) return 'nodes';
+      return 'objects';
+    }
+    return this.#state.selectables;
+  }
   set selectables(v) {
-    this.#state.selectables = v;
-    this.#emit('selectablesChange', v);
+    if (!this.#selectionManager) {
+      this.#state.selectables = v;
+      this.#emit('selectablesChange', v);
+    }
+  }
+
+  get selectMode() {
+    return this.#selectionManager
+      ? this.#selectionManager.selectMode
+      : this.#state.selectMode;
+  }
+  set selectMode(v) {
+    if (this.#selectionManager) {
+      this.#selectionManager.setSelectMode(v);
+    } else {
+      this.#state.selectMode = v;
+      this.#emit('selectModeChange', v);
+    }
   }
 
   on(event, callback) {
@@ -129,7 +578,8 @@ class StateMachine {
       currentTool: this.#state.currentTool,
       currentColor: this.#state.currentColor,
       currentSize: this.#state.currentSize,
-      paths: JSON.parse(JSON.stringify(this.#state.paths))
+      paths: JSON.parse(JSON.stringify(this.#state.paths)),
+      selectMode: this.#state.selectMode
     };
   }
 
@@ -140,11 +590,13 @@ class StateMachine {
     this.#state.currentSize = snapshot.currentSize;
     this.#state.paths = JSON.parse(JSON.stringify(snapshot.paths));
     this.#state.selectedPath = null;
+    this.#state.selectMode = snapshot.selectMode || 'object';
     this.#emit('pathsChange', this.#state.paths);
     this.#emit('modeChange', this.#state.mode);
     this.#emit('toolChange', this.#state.currentTool);
     this.#emit('colorChange', this.#state.currentColor);
     this.#emit('sizeChange', this.#state.currentSize);
+    this.#emit('selectModeChange', this.#state.selectMode);
   }
 
   #saveState() {
@@ -185,39 +637,48 @@ class StateMachine {
   }
 
   updateSelectedPath(props) {
-    if (this.#state.selectedPath) {
-      Object.assign(this.#state.selectedPath, props);
+    const path = this.#selectionManager ? this.#selectionManager.selectedPath : this.#state.selectedPath;
+    if (path) {
+      Object.assign(path, props);
       this.#emit('pathsChange', this.#state.paths);
       this.#saveState();
     }
   }
 
   simplifySelectedPath(tolerance) {
-    if (!this.#state.selectedPath) return;
-    const path = this.#state.selectedPath;
+    const path = this.#selectionManager ? this.#selectionManager.selectedPath : this.#state.selectedPath;
+    if (!path) return;
     path.points = douglasPeucker(path.points, tolerance);
     this.#emit('pathsChange', this.#state.paths);
     this.#saveState();
   }
 
   deleteSelectedNodes() {
-    if (!this.#state.selectedPath || this.#state.selectedNodes.length === 0) return;
-    const path = this.#state.selectedPath;
-    if (path.points.length - this.#state.selectedNodes.length < 2) return; // keep minimum 2 points
-    const toRemove = new Set(this.#state.selectedNodes);
+    const selMgr = this.#selectionManager;
+    const path = selMgr ? selMgr.selectedPath : this.#state.selectedPath;
+    const nodes = selMgr ? selMgr.selectedNodes : this.#state.selectedNodes;
+    if (!path || nodes.length === 0) return;
+    if (path.points.length - nodes.length < 2) return; // keep minimum 2 points
+    const toRemove = new Set(nodes);
     path.points = path.points.filter((_, i) => !toRemove.has(i));
-    this.#state.selectedNodes = [];
-    this.#state.selectables = 'nodes';
+    if (selMgr) {
+      selMgr.selectNodes([]);
+    } else {
+      this.#state.selectedNodes = [];
+      this.#state.selectables = 'nodes';
+      this.#emit('selectedNodesChange', this.#state.selectedNodes);
+      this.#emit('selectablesChange', this.#state.selectables);
+    }
     this.#emit('pathsChange', this.#state.paths);
-    this.#emit('selectedNodesChange', this.#state.selectedNodes);
-    this.#emit('selectablesChange', this.#state.selectables);
     this.#saveState();
   }
 
   insertNodesBetweenSelected() {
-    if (!this.#state.selectedPath || this.#state.selectedNodes.length < 2) return;
-    const path = this.#state.selectedPath;
-    const indices = [...this.#state.selectedNodes].sort((a, b) => a - b);
+    const selMgr = this.#selectionManager;
+    const path = selMgr ? selMgr.selectedPath : this.#state.selectedPath;
+    const nodes = selMgr ? selMgr.selectedNodes : this.#state.selectedNodes;
+    if (!path || nodes.length < 2) return;
+    const indices = [...nodes].sort((a, b) => a - b);
     const newIndices = [];
     let offset = 0;
     for (let i = 0; i < indices.length - 1; i++) {
@@ -231,17 +692,24 @@ class StateMachine {
       newIndices.push(aIdx + 1);
       offset++;
     }
-    this.#state.selectedNodes = [...indices.map(i => i), ...newIndices].sort((a, b) => a - b);
+    const updated = [...indices.map(i => i), ...newIndices].sort((a, b) => a - b);
+    if (selMgr) {
+      selMgr.selectNodes(updated);
+    } else {
+      this.#state.selectedNodes = updated;
+      this.#emit('selectedNodesChange', this.#state.selectedNodes);
+    }
     this.#emit('pathsChange', this.#state.paths);
-    this.#emit('selectedNodesChange', this.#state.selectedNodes);
     this.#saveState();
   }
 
   setNodeTypeForSelected(type) {
-    if (!this.#state.selectedPath || this.#state.selectedNodes.length === 0) return;
-    const path = this.#state.selectedPath;
+    const selMgr = this.#selectionManager;
+    const path = selMgr ? selMgr.selectedPath : this.#state.selectedPath;
+    const nodes = selMgr ? selMgr.selectedNodes : this.#state.selectedNodes;
+    if (!path || nodes.length === 0) return;
     path.points.forEach((p, i) => {
-      if (this.#state.selectedNodes.includes(i)) {
+      if (nodes.includes(i)) {
         p.cpIn = p.cpIn || { x: 0, y: 0 };
         p.cpOut = p.cpOut || { x: 0, y: 0 };
         switch (type) {
@@ -330,11 +798,18 @@ class StateMachine {
 
   setMode(newMode) {
     this.#state.currentPath = null;
-    this.#state.selectedNodes = [];
-    if (newMode !== 'selection') {
-      this.#state.selectedPath = null;
-      this.#state.selectables = 'objects';
-      this.#emit('selectedPathChange', null);
+    this.#emit('currentPathChange', null);
+    if (this.#selectionManager) {
+      if (newMode !== 'selection') {
+        this.#selectionManager.clear();
+      }
+    } else {
+      this.#state.selectedNodes = [];
+      if (newMode !== 'selection') {
+        this.#state.selectedPath = null;
+        this.#state.selectables = 'objects';
+        this.#emit('selectedPathChange', null);
+      }
     }
     this.#state.mode = newMode;
     this.#emit('modeChange', newMode);
@@ -343,10 +818,12 @@ class StateMachine {
 
 class CorePanel {
   #stateMachine;
+  #selectionManager;
   #el;
 
-  constructor(stateMachine) {
+  constructor(stateMachine, selectionManager) {
     this.#stateMachine = stateMachine;
+    this.#selectionManager = selectionManager;
   }
 
   buildDom(container) {
@@ -530,6 +1007,17 @@ class CorePanel {
       btn.addEventListener('click', () => this.#selectTool(tool));
       tools.appendChild(btn);
     });
+
+    // Select mode toggle button (object/node) — only visible in select tool
+    const selectModeBtn = document.createElement('button');
+    selectModeBtn.id = 'selectModeBtn';
+    selectModeBtn.className = 'panel-tool-btn';
+    selectModeBtn.title = 'Mode sélection: objets';
+    selectModeBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>';
+    selectModeBtn.style.display = 'none'; // hidden until select tool is active
+    selectModeBtn.addEventListener('click', () => this.#toggleSelectMode());
+    tools.appendChild(selectModeBtn);
+
     sectionTool.appendChild(tools);
     panel.appendChild(sectionTool);
 
@@ -606,12 +1094,29 @@ class CorePanel {
       pan: 'drawingTool'
     };
     this.#stateMachine.setMode(modeMap[tool] || 'drawingTool');
+
+    // Show/hide select mode button
+    const selectModeBtn = this.#el.querySelector('#selectModeBtn');
+    if (selectModeBtn) {
+      selectModeBtn.style.display = tool === 'select' ? '' : 'none';
+    }
+  }
+
+  #toggleSelectMode() {
+    const current = this.#selectionManager.selectMode;
+    const next = current === SelectMode.OBJECT ? SelectMode.NODE : SelectMode.OBJECT;
+    this.#selectionManager.setSelectMode(next);
+    const btn = this.#el.querySelector('#selectModeBtn');
+    if (btn) {
+      btn.classList.toggle('active', next === SelectMode.NODE);
+      btn.title = next === SelectMode.NODE ? 'Mode sélection: nœuds' : 'Mode sélection: objets';
+    }
   }
 
   #selectColor(color) {
     this.#el.querySelectorAll('.panel-color-btn').forEach(b => b.classList.remove('active'));
     this.#el.querySelector(`[data-color="${color}"]`).classList.add('active');
-    if (this.#stateMachine.selectedPath) {
+    if (this.#selectionManager.selectedPath) {
       this.#stateMachine.updateSelectedPath({ color });
     }
     this.#stateMachine.currentColor = color;
@@ -620,7 +1125,7 @@ class CorePanel {
   #selectSize(size) {
     this.#el.querySelectorAll('.panel-size-btn').forEach(b => b.classList.remove('active'));
     this.#el.querySelector(`[data-size="${size}"]`).classList.add('active');
-    if (this.#stateMachine.selectedPath) {
+    if (this.#selectionManager.selectedPath) {
       this.#stateMachine.updateSelectedPath({ size });
     }
     this.#stateMachine.currentSize = size;
@@ -653,7 +1158,7 @@ class CorePanel {
 
   syncNodeSelection() {
     const section = document.getElementById('panelNode');
-    const nodes = this.#stateMachine.selectedNodes;
+    const nodes = this.#selectionManager.selectedNodes;
     if (!nodes || nodes.length === 0) {
       section.style.display = 'none';
       return;
@@ -669,9 +1174,9 @@ class CorePanel {
   }
 
   #syncNodeTypeSelector() {
-    const path = this.#stateMachine.selectedPath;
+    const path = this.#selectionManager.selectedPath;
     if (!path) return;
-    const nodes = this.#stateMachine.selectedNodes;
+    const nodes = this.#selectionManager.selectedNodes;
     if (nodes.length === 0) return;
 
     // Determine the dominant node type among selected nodes
@@ -703,6 +1208,7 @@ class CorePanel {
 
 class DrawArea {
   #stateMachine;
+  #selectionManager;
   #el;
   #svg;
   #svgPaths;
@@ -719,8 +1225,9 @@ class DrawArea {
   _handleDragOrigPoints = null;
   _handleDragOrigBBox = null;
 
-  constructor(stateMachine) {
+  constructor(stateMachine, selectionManager) {
     this.#stateMachine = stateMachine;
+    this.#selectionManager = selectionManager;
   }
 
   get svgElement() { return this.#svg; }
@@ -884,7 +1391,7 @@ class DrawArea {
     this.#svgPaths.innerHTML = '';
 
     const paths = this.#stateMachine.paths;
-    const selectedPath = this.#stateMachine.selectedPath;
+    const selectedPath = this.#selectionManager.selectedPath;
 
     paths.forEach((path, index) => {
       if (path.points.length < 2) return;
@@ -914,7 +1421,6 @@ class DrawArea {
 
     // Selection bounding box rectangle
     this._drawSelBBox();
-    this._drawNodeSelBBox();
 
     this._redrawSelection();
   }
@@ -951,15 +1457,15 @@ class DrawArea {
    */
   _redrawSelection() {
     this.#svgUI.innerHTML = '';
-    const selectedPath = this.#stateMachine.selectedPath;
-    if (!selectedPath || !selectedPath.points || selectedPath.points.length < 2 ||
-        (this.#stateMachine.selectables !== 'nodes' && this.#stateMachine.selectables !== 'nodeSelection')) {
+    const selectedPath = this.#selectionManager.selectedPath;
+    if (!selectedPath || !selectedPath.points || selectedPath.points.length < 2) {
       this._clearHandleDrag();
       return;
     }
 
     const points = selectedPath.points;
-    const selectedNodes = this.#stateMachine.selectedNodes;
+    const selectedNodes = this.#selectionManager.selectedNodes;
+    const isNodeMode = this.#selectionManager.selectMode === SelectMode.NODE;
 
     // Normalize all points to have cpIn/cpOut/smooth
     points.forEach((p, i) => { points[i] = this._normalizePoint(p); });
@@ -969,8 +1475,8 @@ class DrawArea {
     const tl = this.#docToScreen(bbox.minX - padding, bbox.minY - padding);
     const br = this.#docToScreen(bbox.maxX + padding, bbox.maxY + padding);
 
-    // BBox rectangle (only in 'nodes' mode, not 'nodeSelection')
-    if (this.#stateMachine.selectables === 'nodes') {
+    // BBox rectangle — always visible when a path is selected
+    {
       const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
       rect.setAttribute('x', tl.x);
       rect.setAttribute('y', tl.y);
@@ -978,12 +1484,15 @@ class DrawArea {
       rect.setAttribute('height', br.y - tl.y);
       rect.setAttribute('rx', '4');
       rect.setAttribute('fill', 'none');
-      rect.setAttribute('stroke', '#4fc3f7');
+      rect.setAttribute('stroke', isNodeMode ? '#69f0ae' : '#4fc3f7');
       rect.setAttribute('stroke-width', '2');
       rect.setAttribute('stroke-dasharray', '6 3');
       rect.setAttribute('pointer-events', 'none');
       this.#svgUI.appendChild(rect);
+    }
 
+    // Transform handles (only when no nodes are selected — object-level manipulation)
+    if (!isNodeMode || selectedNodes.length === 0) {
       const handleSize = 10;
       const handles = [
         { name: 'n',  cx: (tl.x + br.x) / 2, cy: tl.y },
@@ -1015,83 +1524,86 @@ class DrawArea {
       this._bboxHandleCenters = [];
     }
 
-    // Build handle list: node circles + control point diamonds
+    // Build handle list: node circles + control point diamonds (node mode only)
     const nodeRadius = 5;
     const cpSize = 7; // diamond half-size
     const nodeHandles = [];
     const allHandles = [];
 
-    points.forEach((p, i) => {
-      const sp = this.#docToScreen(p.x, p.y);
-      const isSelected = selectedNodes.includes(i);
+    if (isNodeMode) {
+      points.forEach((p, i) => {
+        const sp = this.#docToScreen(p.x, p.y);
+        const isSelected = selectedNodes.includes(i);
 
-      // Node circle
-      const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-      c.setAttribute('cx', sp.x);
-      c.setAttribute('cy', sp.y);
-      c.setAttribute('r', nodeRadius);
-      c.setAttribute('fill', isSelected ? '#69f0ae' : '#4fc3f7');
-      c.setAttribute('stroke', isSelected ? '#fff' : '#fff');
-      c.setAttribute('stroke-width', '2');
-      c.setAttribute('pointer-events', 'none');
-      this.#svgUI.appendChild(c);
-      nodeHandles.push({ name: `node:${i}`, x: sp.x, y: sp.y });
+        // Node circle
+        const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        c.setAttribute('cx', sp.x);
+        c.setAttribute('cy', sp.y);
+        c.setAttribute('r', nodeRadius);
+        c.setAttribute('fill', isSelected ? '#69f0ae' : '#4fc3f7');
+        c.setAttribute('stroke', isSelected ? '#fff' : '#fff');
+        c.setAttribute('stroke-width', '2');
+        c.setAttribute('pointer-events', 'none');
+        this.#svgUI.appendChild(c);
+        nodeHandles.push({ name: `node:${i}`, x: sp.x, y: sp.y });
 
-      // For SELECTED nodes: show control point handles and lines
-      if (isSelected && (p.cpIn || p.cpOut || p.smooth)) {
-        const cpIn = p.cpIn || { x: 0, y: 0 };
-        const cpOut = p.cpOut || { x: 0, y: 0 };
-        const hasCpIn = cpIn.x !== 0 || cpIn.y !== 0;
-        const hasCpOut = cpOut.x !== 0 || cpOut.y !== 0;
+        // For SELECTED nodes: show control point handles and lines
+        if (isSelected && (p.cpIn || p.cpOut || p.smooth)) {
+          const cpIn = p.cpIn || { x: 0, y: 0 };
+          const cpOut = p.cpOut || { x: 0, y: 0 };
+          const hasCpIn = cpIn.x !== 0 || cpIn.y !== 0;
+          const hasCpOut = cpOut.x !== 0 || cpOut.y !== 0;
 
-        if (hasCpIn || hasCpOut) {
-          // Control point lines
-          if (hasCpIn) {
-            const cpInScreen = this.#docToScreen(p.x + cpIn.x, p.y + cpIn.y);
-            const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-            line.setAttribute('x1', sp.x); line.setAttribute('y1', sp.y);
-            line.setAttribute('x2', cpInScreen.x); line.setAttribute('y2', cpInScreen.y);
-            line.setAttribute('stroke', '#ffa726');
-            line.setAttribute('stroke-width', '1.5');
-            line.setAttribute('pointer-events', 'none');
-            this.#svgUI.appendChild(line);
+          if (hasCpIn || hasCpOut) {
+            // Control point lines
+            if (hasCpIn) {
+              const cpInScreen = this.#docToScreen(p.x + cpIn.x, p.y + cpIn.y);
+              const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+              line.setAttribute('x1', sp.x); line.setAttribute('y1', sp.y);
+              line.setAttribute('x2', cpInScreen.x); line.setAttribute('y2', cpInScreen.y);
+              line.setAttribute('stroke', '#ffa726');
+              line.setAttribute('stroke-width', '1.5');
+              line.setAttribute('pointer-events', 'none');
+              this.#svgUI.appendChild(line);
 
-            // cpIn diamond
-            const d = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
-            const pts = `${cpInScreen.x},${cpInScreen.y - cpSize} ${cpInScreen.x + cpSize},${cpInScreen.y} ${cpInScreen.x},${cpInScreen.y + cpSize} ${cpInScreen.x - cpSize},${cpInScreen.y}`;
-            d.setAttribute('points', pts);
-            d.setAttribute('fill', '#ffa726');
-            d.setAttribute('stroke', '#fff');
-            d.setAttribute('stroke-width', '1.5');
-            d.setAttribute('pointer-events', 'none');
-            this.#svgUI.appendChild(d);
-            allHandles.push({ name: `cpIn:${i}`, x: cpInScreen.x, y: cpInScreen.y });
-          }
+              // cpIn diamond
+              const d = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+              const pts = `${cpInScreen.x},${cpInScreen.y - cpSize} ${cpInScreen.x + cpSize},${cpInScreen.y} ${cpInScreen.x},${cpInScreen.y + cpSize} ${cpInScreen.x - cpSize},${cpInScreen.y}`;
+              d.setAttribute('points', pts);
+              d.setAttribute('fill', '#ffa726');
+              d.setAttribute('stroke', '#fff');
+              d.setAttribute('stroke-width', '1.5');
+              d.setAttribute('pointer-events', 'none');
+              this.#svgUI.appendChild(d);
+              allHandles.push({ name: `cpIn:${i}`, x: cpInScreen.x, y: cpInScreen.y });
+            }
 
-          if (hasCpOut) {
-            const cpOutScreen = this.#docToScreen(p.x + cpOut.x, p.y + cpOut.y);
-            const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-            line.setAttribute('x1', sp.x); line.setAttribute('y1', sp.y);
-            line.setAttribute('x2', cpOutScreen.x); line.setAttribute('y2', cpOutScreen.y);
-            line.setAttribute('stroke', '#ffa726');
-            line.setAttribute('stroke-width', '1.5');
-            line.setAttribute('pointer-events', 'none');
-            this.#svgUI.appendChild(line);
+            if (hasCpOut) {
+              const cpOutScreen = this.#docToScreen(p.x + cpOut.x, p.y + cpOut.y);
+              const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+              line.setAttribute('x1', sp.x); line.setAttribute('y1', sp.y);
+              line.setAttribute('x2', cpOutScreen.x); line.setAttribute('y2', cpOutScreen.y);
+              line.setAttribute('stroke', '#ffa726');
+              line.setAttribute('stroke-width', '1.5');
+              line.setAttribute('pointer-events', 'none');
+              this.#svgUI.appendChild(line);
 
-            // cpOut diamond
-            const d = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
-            const pts = `${cpOutScreen.x},${cpOutScreen.y - cpSize} ${cpOutScreen.x + cpSize},${cpOutScreen.y} ${cpOutScreen.x},${cpOutScreen.y + cpSize} ${cpOutScreen.x - cpSize},${cpOutScreen.y}`;
-            d.setAttribute('points', pts);
-            d.setAttribute('fill', '#ffa726');
-            d.setAttribute('stroke', '#fff');
-            d.setAttribute('stroke-width', '1.5');
-            d.setAttribute('pointer-events', 'none');
-            this.#svgUI.appendChild(d);
-            allHandles.push({ name: `cpOut:${i}`, x: cpOutScreen.x, y: cpOutScreen.y });
+              // cpOut diamond
+              const d = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+              const pts = `${cpOutScreen.x},${cpOutScreen.y - cpSize} ${cpOutScreen.x + cpSize},${cpOutScreen.y} ${cpOutScreen.x},${cpOutScreen.y + cpSize} ${cpOutScreen.x - cpSize},${cpOutScreen.y}`;
+              d.setAttribute('points', pts);
+              d.setAttribute('fill', '#ffa726');
+              d.setAttribute('stroke', '#fff');
+              d.setAttribute('stroke-width', '1.5');
+              d.setAttribute('pointer-events', 'none');
+              this.#svgUI.appendChild(d);
+              allHandles.push({ name: `cpOut:${i}`, x: cpOutScreen.x, y: cpOutScreen.y });
+            }
           }
         }
       }
     });
+    } // end if (isNodeMode)
 
     this._handleCenters = [...nodeHandles, ...allHandles];
     this._handleHitRadius = Math.max(nodeRadius, cpSize) * 2.5;
@@ -1104,7 +1616,7 @@ class DrawArea {
   _startHandleDrag(handleName, screenX, screenY) {
     const doc = this.#screenToDoc(screenX, screenY);
 
-    const path = this.#stateMachine.selectedPath;
+    const path = this.#selectionManager.selectedPath;
     if (!path) return;
 
     this._handleDragHandle = handleName;
@@ -1114,6 +1626,9 @@ class DrawArea {
     });
     this._handleDragOrigBBox = this.#computeBBox(path.points);
     this._handleDragStartDoc = doc;
+
+    const handleInfo = { name: handleName, screenX, screenY, docX: doc.x, docY: doc.y };
+    this.#selectionManager.startHandleDrag(handleInfo);
 
     this._handleDragMove = (ev) => this._onHandleDragMove(ev);
     this._handleDragEnd = (ev) => this._onHandleDragEnd(ev);
@@ -1130,12 +1645,20 @@ class DrawArea {
     const screenY = touch.clientY - containerRect.top;
     const doc = this.#screenToDoc(screenX, screenY);
 
+    const handleInfo = {
+      name: this._handleDragHandle,
+      screenX, screenY,
+      docX: doc.x, docY: doc.y
+    };
+    this.#selectionManager.handleDrag(handleInfo);
+
     this._deformPath(doc);
     this._redraw();
     e.preventDefault();
   }
 
   _onHandleDragEnd() {
+    this.#selectionManager.endHandleDrag();
     this.#touchOverlay.removeEventListener('touchmove', this._handleDragMove);
     this.#touchOverlay.removeEventListener('touchend', this._handleDragEnd);
     this.#touchOverlay.removeEventListener('touchcancel', this._handleDragEnd);
@@ -1160,7 +1683,7 @@ class DrawArea {
    * Déforme le tracé sélectionné selon le déplacement de la poignée.
    */
   _deformPath(newDocPos) {
-    const path = this.#stateMachine.selectedPath;
+    const path = this.#selectionManager.selectedPath;
     if (!path) return;
 
     // Normalize points
@@ -1369,20 +1892,22 @@ class DrawArea {
     this.#stateMachine.on('currentPathChange', () => this._redraw());
     this.#stateMachine.on('selectedPathChange', () => this._redraw());
 
+    // SelectionManager events
+    if (this.#selectionManager) {
+      this.#selectionManager.on('selectionChange', () => this._redraw());
+      this.#selectionManager.on('handleDrag', () => this._redraw());
+    }
+
     // Cursor events — drawing or selection bbox
     overlay.engine.on('cursorActivate', (e) => {
       if (this.#stateMachine.mode === 'drawingTool') {
         const pt = this.#screenToDoc(e.touchX, e.touchY);
         this.#stateMachine.currentPath = [{ x: pt.x, y: pt.y }];
-      } else if (this.#stateMachine.mode === 'selection' && this.#stateMachine.selectables === 'objects') {
+      } else if (this.#stateMachine.mode === 'selection') {
+        // In selection mode, cursorActivate starts a bbox (both object and node mode)
         const doc = this.#screenToDoc(e.touchX, e.touchY);
         this._selBBoxStart = doc;
         this._selBBoxCurrent = doc;
-      } else if (this.#stateMachine.mode === 'selection') {
-        // nodes / nodeSelection: node bbox selection
-        const doc = this.#screenToDoc(e.touchX, e.touchY);
-        this._nodeSelBBoxStart = doc;
-        this._nodeSelBBoxCurrent = doc;
       }
     });
 
@@ -1394,11 +1919,9 @@ class DrawArea {
           path.push({ x: pt.x, y: pt.y });
           this._redraw();
         }
-      } else if (this.#stateMachine.mode === 'selection' && this.#stateMachine.selectables === 'objects') {
-        this._selBBoxCurrent = this.#screenToDoc(e.touchX, e.touchY);
-        this._redraw();
       } else if (this.#stateMachine.mode === 'selection') {
-        this._nodeSelBBoxCurrent = this.#screenToDoc(e.touchX, e.touchY);
+        // Update bbox de sélection
+        this._selBBoxCurrent = this.#screenToDoc(e.touchX, e.touchY);
         this._redraw();
       }
     });
@@ -1415,57 +1938,67 @@ class DrawArea {
         }
         this.#stateMachine.currentPath = null;
       } else if (this.#stateMachine.mode === 'selection') {
-        if (this.#stateMachine.selectables === 'objects') {
-          this._selectInBBox();
-          this._selBBoxStart = null;
-          this._selBBoxCurrent = null;
+        // End of bbox — perform additive selection
+        if (this.#selectionManager.selectMode === SelectMode.OBJECT) {
+          this._addPathsInBBox();
         } else {
-          // Hide bbox before selection calc to prevent redraw of stale bbox
-          const bboxStart = this._nodeSelBBoxStart;
-          const bboxCurrent = this._nodeSelBBoxCurrent;
-          this._nodeSelBBoxStart = null;
-          this._nodeSelBBoxCurrent = null;
-          this._selectNodesInBBox(bboxStart, bboxCurrent);
+          this._addNodesInBBox();
         }
+        this._selBBoxStart = null;
+        this._selBBoxCurrent = null;
       }
     });
     this._selBBoxStart = null;
     this._selBBoxCurrent = null;
-    this._nodeSelBBoxStart = null;
-    this._nodeSelBBoxCurrent = null;
 
     overlay.engine.on('tap', (e) => {
-      if (this.#stateMachine.mode === 'selection') {
-        if (this.#stateMachine.selectables === 'objects') {
-          const pt = this.#screenToDoc(e.x, e.y);
-          const found = this._findPathAtPoint(pt.x, pt.y);
-          this.#stateMachine.selectedPath = found || null;
+      if (this.#stateMachine.mode !== 'selection') return;
+
+      if (this.#selectionManager.selectMode === SelectMode.OBJECT) {
+        // Object mode: tap toggles whole path
+        const pt = this.#screenToDoc(e.x, e.y);
+        const found = this._findPathAtPoint(pt.x, pt.y);
+        if (found) {
+          this.#selectionManager.togglePath(found);
         } else {
-          // nodes/nodeSelection mode: select/deselect individual node by tap
-          const sx = e.x;
-          const sy = e.y;
-          let hitHandle = null;
-          let minDist = Infinity;
-          if (this._handleCenters) {
-            for (const h of this._handleCenters) {
-              const d = Math.hypot(sx - h.x, sy - h.y);
-              if (d < minDist) { minDist = d; hitHandle = h; }
-            }
+          // Tap on empty space — deselect
+          this.#selectionManager.selectPath(null);
+        }
+      } else {
+        // Node mode: tap toggles nodes on the active path
+        const sx = e.x;
+        const sy = e.y;
+
+        // Check if tap hit a node handle
+        let hitHandle = null;
+        let minDist = Infinity;
+        if (this._handleCenters) {
+          for (const h of this._handleCenters) {
+            const d = Math.hypot(sx - h.x, sy - h.y);
+            if (d < minDist) { minDist = d; hitHandle = h; }
           }
-          // Determine node index from handle name (node:N, cpIn:N, cpOut:N)
-          let nodeIdx = -1;
-          if (hitHandle) {
-            const parts = hitHandle.name.split(':');
-            nodeIdx = parseInt(parts[1], 10);
-          }
-          if (nodeIdx >= 0) {
-            const nodes = this.#stateMachine.selectedNodes;
-            const i = nodes.indexOf(nodeIdx);
-            if (i >= 0) nodes.splice(i, 1);
-            else nodes.push(nodeIdx);
-            this.#stateMachine.selectedNodes = [...nodes];
-          } else {
-            this.#stateMachine.selectedNodes = [];
+        }
+
+        // Determine node index from handle name (node:N, cpIn:N, cpOut:N)
+        let nodeIdx = -1;
+        if (hitHandle) {
+          const parts = hitHandle.name.split(':');
+          nodeIdx = parseInt(parts[1], 10);
+        }
+
+        if (nodeIdx >= 0) {
+          // Toggle this node
+          this.#selectionManager.toggleNode(nodeIdx);
+        } else {
+          // Tap on empty space or non-handle area
+          const pt = this.#screenToDoc(sx, sy);
+          const found = this._findPathAtPoint(pt.x, pt.y);
+          if (found && found !== this.#selectionManager.selectedPath) {
+            // Switch active path
+            this.#selectionManager.selectPath(found);
+          } else if (!found) {
+            // Tap on empty space — deselect
+            this.#selectionManager.selectPath(null);
           }
         }
       }
@@ -1550,85 +2083,62 @@ class DrawArea {
   }
 
   /**
-   * Sélectionne le premier chemin dont un nœud est dans la boîte de sélection.
+   * Add paths found in the bbox to the selection (additive).
    */
-  _selectInBBox() {
+  _addPathsInBBox() {
     if (!this._selBBoxStart || !this._selBBoxCurrent) return;
     const x1 = Math.min(this._selBBoxStart.x, this._selBBoxCurrent.x);
     const y1 = Math.min(this._selBBoxStart.y, this._selBBoxCurrent.y);
     const x2 = Math.max(this._selBBoxStart.x, this._selBBoxCurrent.x);
     const y2 = Math.max(this._selBBoxStart.y, this._selBBoxCurrent.y);
 
-    // Ignorer si trop petit (c'était un tap)
+    // Ignore if too small (was a tap)
     if (x2 - x1 < 5 && y2 - y1 < 5) return;
 
     const paths = this.#stateMachine.paths;
-    let found = null;
+    const found = [];
     for (let i = paths.length - 1; i >= 0; i--) {
       const path = paths[i];
       for (const p of path.points) {
         if (p.x >= x1 && p.x <= x2 && p.y >= y1 && p.y <= y2) {
-          found = path;
+          found.push(path);
           break;
         }
       }
-      if (found) break;
     }
-    this._selBBoxStart = null;
-    this._selBBoxCurrent = null;
-    this.#stateMachine.selectedPath = found || null;
+
+    // Add first found path (top-most) to selection
+    if (found.length > 0) {
+      this.#selectionManager.selectPath(found[0]);
+    }
   }
 
   /**
-   * Sélectionne les nœuds dont la position est dans la boîte de sélection.
-   * @param {object} bboxStart - Start point in document coords
-   * @param {object} bboxCurrent - Current point in document coords
+   * Add nodes found in the bbox to the current node selection (additive).
    */
-  _selectNodesInBBox(bboxStart, bboxCurrent) {
-    if (!bboxStart || !bboxCurrent) return;
-    const x1 = Math.min(bboxStart.x, bboxCurrent.x);
-    const y1 = Math.min(bboxStart.y, bboxCurrent.y);
-    const x2 = Math.max(bboxStart.x, bboxCurrent.x);
-    const y2 = Math.max(bboxStart.y, bboxCurrent.y);
+  _addNodesInBBox() {
+    if (!this._selBBoxStart || !this._selBBoxCurrent) return;
+    const x1 = Math.min(this._selBBoxStart.x, this._selBBoxCurrent.x);
+    const y1 = Math.min(this._selBBoxStart.y, this._selBBoxCurrent.y);
+    const x2 = Math.max(this._selBBoxStart.x, this._selBBoxCurrent.x);
+    const y2 = Math.max(this._selBBoxStart.y, this._selBBoxCurrent.y);
 
-    if (x2 - x1 < 5 && y2 - y1 < 5) return; // too small, was a tap
+    // Ignore if too small (was a tap)
+    if (x2 - x1 < 5 && y2 - y1 < 5) return;
 
-    const path = this.#stateMachine.selectedPath;
+    const path = this.#selectionManager.selectedPath;
     if (!path) return;
 
-    const selected = [];
+    const found = [];
     path.points.forEach((p, i) => {
-      // path points are stored in document coordinates
       if (p.x >= x1 && p.x <= x2 && p.y >= y1 && p.y <= y2) {
-        selected.push(i);
+        found.push(i);
       }
     });
-    this.#stateMachine.selectedNodes = selected;
+
+    if (found.length > 0) {
+      this.#selectionManager.addNodes(found);
+    }
   }
 
-  /**
-   * Dessine la boîte de sélection des nœuds (couleur différente).
-   */
-  _drawNodeSelBBox() {
-    if (!this._nodeSelBBoxStart || !this._nodeSelBBoxCurrent) return;
-    const sx1 = this._nodeSelBBoxStart.x;
-    const sy1 = this._nodeSelBBoxStart.y;
-    const sx2 = this._nodeSelBBoxCurrent.x;
-    const sy2 = this._nodeSelBBoxCurrent.y;
-    const x = Math.min(sx1, sx2);
-    const y = Math.min(sy1, sy2);
-    const w = Math.abs(sx2 - sx1);
-    const h = Math.abs(sy2 - sy1);
-    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-    rect.setAttribute('x', x);
-    rect.setAttribute('y', y);
-    rect.setAttribute('width', w);
-    rect.setAttribute('height', h);
-    rect.setAttribute('fill', 'rgba(105,240,174,0.1)');
-    rect.setAttribute('stroke', '#69f0ae');
-    rect.setAttribute('stroke-width', '2');
-    rect.setAttribute('stroke-dasharray', '4 3');
-    rect.setAttribute('pointer-events', 'none');
-    this.#svgSelection.appendChild(rect);
-  }
 }

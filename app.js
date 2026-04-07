@@ -28,6 +28,7 @@ class LayoutManager {
 
 class Application {
   #statesMachine;
+  #selectionManager;
   #corePanel;
   #drawArea;
   #touchOverlay;
@@ -35,8 +36,10 @@ class Application {
 
   constructor(options = {}) {
     this.#statesMachine = new StateMachine();
-    this.#corePanel = new CorePanel(this.#statesMachine);
-    this.#drawArea = new DrawArea(this.#statesMachine);
+    this.#selectionManager = new SelectionManager(this.#statesMachine);
+    this.#statesMachine.setSelectionManager(this.#selectionManager);
+    this.#corePanel = new CorePanel(this.#statesMachine, this.#selectionManager);
+    this.#drawArea = new DrawArea(this.#statesMachine, this.#selectionManager);
 
     this.buildDom(options.container || document.body);
     this.#init();
@@ -92,6 +95,11 @@ class Application {
         '<span class="raw-chip" data-state="tool:pan">pan</span>' +
       '</div>' +
       '<div class="raw-state-group">' +
+        '<span class="raw-label">selectMode</span>' +
+        '<span class="raw-chip" data-state="selMode:object">object</span>' +
+        '<span class="raw-chip" data-state="selMode:node">node</span>' +
+      '</div>' +
+      '<div class="raw-state-group">' +
         '<span class="raw-label">selectables</span>' +
         '<span class="raw-chip" data-state="sel:objects">objects</span>' +
         '<span class="raw-chip" data-state="sel:nodes">nodes</span>' +
@@ -132,6 +140,11 @@ class Application {
           '<span class="raw-chip" data-state="tool:draw">draw</span>' +
           '<span class="raw-chip" data-state="tool:select">select</span>' +
           '<span class="raw-chip" data-state="tool:pan">pan</span>' +
+        '</div>' +
+        '<div class="raw-state-group">' +
+          '<span class="raw-label">selectMode</span>' +
+          '<span class="raw-chip" data-state="selMode:object">object</span>' +
+          '<span class="raw-chip" data-state="selMode:node">node</span>' +
         '</div>' +
         '<div class="raw-state-group">' +
           '<span class="raw-label">selectables</span>' +
@@ -274,6 +287,10 @@ class Application {
       this.#drawArea._redraw();
       this.#updateRawStates();
     });
+
+    // SelectionManager events
+    this.#selectionManager.on('selectionChange', () => this.#updateRawStates());
+    this.#selectionManager.on('stateChange', () => this.#updateRawStates());
     this.#statesMachine.on('currentPathChange', () => this.#updateRawStates());
     this.#statesMachine.on('selectablesChange', () => this.#updateRawStates());
     this.#statesMachine.on('pathsChange', () => {
@@ -299,6 +316,8 @@ class Application {
       if (key.startsWith('mode:')) active = sm.mode === key.slice(5);
       else if (key.startsWith('tool:')) active = sm.currentTool === key.slice(5);
       else if (key.startsWith('sel:')) active = sm.selectables === key.slice(4);
+      else if (key === 'selMode:object') active = sm.selectMode === 'object';
+      else if (key === 'selMode:node') active = sm.selectMode === 'node';
       else if (key === 'has:currentPath') active = !!sm.currentPath;
       else if (key === 'has:selectedPath') active = !!sm.selectedPath;
       else if (key === 'has:selectedNodes') active = (sm.selectedNodes && sm.selectedNodes.length > 0);

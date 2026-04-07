@@ -1,0 +1,37 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git config *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git reset *)",
+      "Bash(git checkout *)",
+      "Bash(node *)",
+      "Bash(git remote *)",
+      "Bash(git push *)",
+      "Bash(ssh-keygen *)",
+      "Bash(cat)",
+      "Bash(host *)",
+      "Bash(hostname *)",
+      "Bash(user *)",
+      "Bash(identityfile *)",
+      "Bash(identitiesonly *)",
+      "Bash(eof)",
+      "Bash(chmod *)",
+      "Bash(which *)",
+      "Bash(gh *)",
+      "Bash(dnf *)",
+      "Bash(sleep *)",
+      "Bash(kill *)",
+      "Bash(ssh *)",
+      "Bash(true)",
+      "Bash(mkdir *)",
+      "Bash(github.com:)",
+      "Bash(git_protocol: *)",
+      "Bash(users:)",
+      "Bash(s1pierro:)",
+      "Bash(active_user: *)"
+    ]
+  },
+  "$version": 3
+}
