@@ -3,6 +3,7 @@
  * Generic reusable window with header (title + close button), body, and resize handle.
  */
 class SubWindow {
+  static STORAGE_KEY = 'vectux_windows';
   #id;
   #title;
   #contentBuilder;
@@ -10,13 +11,24 @@ class SubWindow {
   #visible = false;
   #position;  // {left, top}
   #size;      // {width, height}
+  #container;
 
   constructor(options = {}) {
     this.#id = options.id || `subwindow-${Date.now()}`;
     this.#title = options.title || 'Window';
-    this.#contentBuilder = options.content || null; // function that returns DOM
-    this.#position = { left: options.left || '10vw', top: options.top || '10vh' };
-    this.#size = { width: options.width || '33vw', height: options.height || '50vh' };
+    this.#contentBuilder = options.content || null;
+    this.#container = null;
+
+    // Try to restore from localStorage
+    const saved = this.#loadFromStorage();
+    if (saved) {
+      this.#position = saved.position;
+      this.#size = saved.size;
+      this.#visible = saved.visible;
+    } else {
+      this.#position = { left: options.left || '10vw', top: options.top || '10vh' };
+      this.#size = { width: options.width || '33vw', height: options.height || '50vh' };
+    }
     this._listeners = {};
   }
 
@@ -89,6 +101,12 @@ class SubWindow {
     modal.appendChild(body);
 
     container.appendChild(modal);
+    this.#container = container;
+
+    // Apply saved visibility
+    if (this.#visible) {
+      modal.style.display = 'flex';
+    }
 
     // Close button
     header.querySelector('.sub-window-close').addEventListener('click', () => this.hide());
@@ -121,8 +139,8 @@ class SubWindow {
       modal.style.left = (t.clientX - dragX) + 'px';
       modal.style.top = (t.clientY - dragY) + 'px';
     }, { passive: true });
-    window.addEventListener('mouseup', () => { dragging = false; });
-    window.addEventListener('touchend', () => { dragging = false; });
+    window.addEventListener('mouseup', () => { dragging = false; this.#saveToStorage(); });
+    window.addEventListener('touchend', () => { dragging = false; this.#saveToStorage(); });
 
     // Resize
     let resizing = false, resizeStartX, resizeStartY, resizeStartW, resizeStartH;
@@ -164,14 +182,15 @@ class SubWindow {
       modal.style.width = w + 'px';
       modal.style.height = h + 'px';
     }, { passive: true });
-    window.addEventListener('mouseup', () => { resizing = false; });
-    window.addEventListener('touchend', () => { resizing = false; });
+    window.addEventListener('mouseup', () => { resizing = false; this.#saveToStorage(); });
+    window.addEventListener('touchend', () => { resizing = false; this.#saveToStorage(); });
   }
 
   show() {
     if (this.#el) {
       this.#el.style.display = 'flex';
       this.#visible = true;
+      this.#saveToStorage();
       this.#emit('show');
     }
   }
@@ -180,6 +199,7 @@ class SubWindow {
     if (this.#el) {
       this.#el.style.display = 'none';
       this.#visible = false;
+      this.#saveToStorage();
       this.#emit('hide');
     }
   }
@@ -193,6 +213,35 @@ class SubWindow {
     this.#title = title;
     const titleEl = this.#el?.querySelector('.sub-window-title');
     if (titleEl) titleEl.textContent = title;
+  }
+
+  /** Load saved state from localStorage */
+  #loadFromStorage() {
+    try {
+      const data = localStorage.getItem(SubWindow.STORAGE_KEY);
+      if (!data) return null;
+      const all = JSON.parse(data);
+      return all[this.#id] || null;
+    } catch { return null; }
+  }
+
+  /** Save current state to localStorage */
+  #saveToStorage() {
+    try {
+      const data = JSON.parse(localStorage.getItem(SubWindow.STORAGE_KEY) || '{}');
+      data[this.#id] = {
+        position: {
+          left: this.#el ? this.#el.style.left : this.#position.left,
+          top: this.#el ? this.#el.style.top : this.#position.top
+        },
+        size: {
+          width: this.#el ? this.#el.style.width : this.#size.width,
+          height: this.#el ? this.#el.style.height : this.#size.height
+        },
+        visible: this.#visible
+      };
+      localStorage.setItem(SubWindow.STORAGE_KEY, JSON.stringify(data));
+    } catch {}
   }
 }
 
