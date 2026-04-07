@@ -452,6 +452,7 @@ class DrawArea {
   #svgPaths;
   #svgCurrentPath;
   #svgSelection;
+  #svgUI;
   #touchOverlay;
   #panX = 0;
   #panY = 0;
@@ -494,6 +495,15 @@ class DrawArea {
     this.#svg.appendChild(this.#svgSelection);
     this.#svg.appendChild(this.#svgCurrentPath);
     drawArea.appendChild(this.#svg);
+
+    // UI layer — SVG en coordonnées écran, indépendant du zoom/pan
+    this.#svgUI = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    this.#svgUI.setAttribute('id', 'drawAreaSvgUI');
+    this.#svgUI.setAttribute('width', '100%');
+    this.#svgUI.setAttribute('height', '100%');
+    this.#svgUI.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;';
+    drawArea.appendChild(this.#svgUI);
+
     this.#el = drawArea;
     this.#touchOverlay = touchOverlay;
     container.appendChild(drawArea);
@@ -525,12 +535,29 @@ class DrawArea {
   }
 
   /**
+   * Convertit les coordonnées document SVG en coordonnées écran relatives au container.
+   * Inverse de #screenToDoc.
+   */
+  #docToScreen(docX, docY) {
+    const svg = this.#svg;
+    const ctm = svg.getScreenCTM();
+    if (!ctm) return { x: docX, y: docY };
+    const pt = svg.createSVGPoint();
+    pt.x = docX;
+    pt.y = docY;
+    const screenPt = pt.matrixTransform(ctm);
+    const overlayRect = this.#touchOverlay.getBoundingClientRect();
+    return { x: screenPt.x - overlayRect.left, y: screenPt.y - overlayRect.top };
+  }
+
+  /**
    * Déplace le viewport de dx/dy en coordonnées document.
    */
   #pan(dx, dy) {
     this.#panX -= dx;
     this.#panY -= dy;
     this.#applyTransform();
+    this._redrawSelection();
   }
 
   /**
@@ -544,6 +571,7 @@ class DrawArea {
     this.#panY = py - (py - this.#panY) / s;
     this.#zoom = newZoom;
     this.#applyTransform();
+    this._redrawSelection();
   }
 
   #pointsToSvgPath(points) {
@@ -589,24 +617,60 @@ class DrawArea {
       this.#svgCurrentPath.setAttribute('d', '');
     }
 
-    // Selection bounding box
-    this.#svgSelection.innerHTML = '';
-    if (selectedPath && selectedPath.points && selectedPath.points.length >= 2) {
-      const bbox = this.#computeBBox(selectedPath.points);
-      const padding = 4;
-      const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-      rect.setAttribute('x', bbox.minX - padding);
-      rect.setAttribute('y', bbox.minY - padding);
-      rect.setAttribute('width', bbox.maxX - bbox.minX + padding * 2);
-      rect.setAttribute('height', bbox.maxY - bbox.minY + padding * 2);
-      rect.setAttribute('rx', '4');
-      rect.setAttribute('fill', 'none');
-      rect.setAttribute('stroke', '#4fc3f7');
-      rect.setAttribute('stroke-width', '2');
-      rect.setAttribute('stroke-dasharray', '6 3');
-      rect.setAttribute('pointer-events', 'none');
-      this.#svgSelection.appendChild(rect);
-    }
+    this._redrawSelection();
+  }
+
+  /**
+   * Redessine la boîte englobante et les poignées dans le layer UI (coordonnées écran).
+   */
+  _redrawSelection() {
+    this.#svgUI.innerHTML = '';
+    const selectedPath = this.#stateMachine.selectedPath;
+    if (!selectedPath || !selectedPath.points || selectedPath.points.length < 2) return;
+
+    const bbox = this.#computeBBox(selectedPath.points);
+    const padding = 4;
+    const tl = this.#docToScreen(bbox.minX - padding, bbox.minY - padding);
+    const br = this.#docToScreen(bbox.maxX + padding, bbox.maxY + padding);
+
+    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    rect.setAttribute('x', tl.x);
+    rect.setAttribute('y', tl.y);
+    rect.setAttribute('width', br.x - tl.x);
+    rect.setAttribute('height', br.y - tl.y);
+    rect.setAttribute('rx', '4');
+    rect.setAttribute('fill', 'none');
+    rect.setAttribute('stroke', '#4fc3f7');
+    rect.setAttribute('stroke-width', '2');
+    rect.setAttribute('stroke-dasharray', '6 3');
+    rect.setAttribute('pointer-events', 'none');
+    this.#svgUI.appendChild(rect);
+
+    // Poignées aux coins et milieux
+    const handleSize = 8;
+    const corners = [
+      { x: (tl.x + br.x) / 2, y: tl.y },  // top
+      { x: (tl.x + br.x) / 2, y: br.y },  // bottom
+      { x: tl.x, y: (tl.y + br.y) / 2 },  // left
+      { x: br.x, y: (tl.y + br.y) / 2 },  // right
+      { x: tl.x, y: tl.y },               // top-left
+      { x: br.x, y: tl.y },               // top-right
+      { x: tl.x, y: br.y },               // bottom-left
+      { x: br.x, y: br.y },               // bottom-right
+    ];
+    corners.forEach(c => {
+      const h = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      h.setAttribute('x', c.x - handleSize / 2);
+      h.setAttribute('y', c.y - handleSize / 2);
+      h.setAttribute('width', handleSize);
+      h.setAttribute('height', handleSize);
+      h.setAttribute('rx', '2');
+      h.setAttribute('fill', '#fff');
+      h.setAttribute('stroke', '#4fc3f7');
+      h.setAttribute('stroke-width', '2');
+      h.setAttribute('pointer-events', 'none');
+      this.#svgUI.appendChild(h);
+    });
   }
 
   #computeBBox(points) {
