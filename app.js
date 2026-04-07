@@ -478,6 +478,60 @@ class Application {
       height: '50vh'
     });
 
+    // Color picker SubWindow
+    const colorContentFn = () => {
+      const body = document.createElement('div');
+      body.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;justify-content:center;';
+      const colorList = ['#1a1a2e', '#ffffff', '#ff5252', '#4fc3f7', '#69f0ae', '#ffd54f', '#ba68c8', '#ff9800', '#212121'];
+      colorList.forEach((color, i) => {
+        const btn = document.createElement('button');
+        btn.className = 'panel-color-btn' + (i === 0 ? ' active' : '');
+        btn.dataset.color = color;
+        btn.style.cssText = `background:${color};width:32px;height:32px;border-radius:4px;border:2px solid rgba(255,255,255,0.2);cursor:pointer;`;
+        btn.addEventListener('click', () => {
+          this.#corePanel.selectColor(color);
+        });
+        body.appendChild(btn);
+      });
+      return body;
+    };
+    this.#subWindowManager.addWindow('colorPicker', {
+      id: 'colorPicker',
+      title: 'Couleurs',
+      content: colorContentFn,
+      left: '60vw',
+      top: '10vh',
+      width: '200px',
+      height: 'auto'
+    });
+
+    // Size selector SubWindow
+    const sizeContentFn = () => {
+      const body = document.createElement('div');
+      body.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;justify-content:center;';
+      const sizeList = [2, 4, 8, 16];
+      sizeList.forEach((size, i) => {
+        const btn = document.createElement('button');
+        btn.className = 'panel-size-btn' + (i === 2 ? ' active' : '');
+        btn.dataset.size = size;
+        btn.style.cssText = `width:${size + 8}px;height:${size + 8}px;border-radius:50%;background:rgba(255,255,255,0.1);border:2px solid rgba(255,255,255,0.3);cursor:pointer;`;
+        btn.addEventListener('click', () => {
+          this.#corePanel.selectSize(size);
+        });
+        body.appendChild(btn);
+      });
+      return body;
+    };
+    this.#subWindowManager.addWindow('sizeSelector', {
+      id: 'sizeSelector',
+      title: 'Tailles',
+      content: sizeContentFn,
+      left: '70vw',
+      top: '10vh',
+      width: '150px',
+      height: 'auto'
+    });
+
     // Toggle raw states with double-tap on statusBar
     statusBar.addEventListener('dblclick', () => {
       this.#subWindowManager.toggleWindow('rawStates');

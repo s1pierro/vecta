@@ -1028,22 +1028,13 @@ class CorePanel {
     sep2.className = 'panel-sep';
     panel.appendChild(sep2);
 
-    // Section Colors
+    // Section Colors — replaced by SubWindow colorPicker
+    // (buttons now rendered in SubWindow, kept for potential fallback)
     const sectionColors = document.createElement('div');
     sectionColors.className = 'panel-section panel-section-colors';
-
-    const colors = document.createElement('div');
-    colors.id = 'panelColors';
-    const colorList = ['#1a1a2e', '#ffffff', '#ff5252', '#4fc3f7', '#69f0ae', '#ffd54f', '#ba68c8', '#ff9800', '#212121'];
-    colorList.forEach((color, i) => {
-      const btn = document.createElement('button');
-      btn.className = 'panel-color-btn' + (i === 0 ? ' active' : '');
-      btn.dataset.color = color;
-      btn.style.background = color;
-      btn.addEventListener('click', () => this.#selectColor(color));
-      colors.appendChild(btn);
-    });
-    sectionColors.appendChild(colors);
+    sectionColors.innerHTML = '<div class="panel-section-info" style="color:rgba(255,255,255,0.3);font-size:0.7em;">Couleur → fenêtre</div>';
+    sectionColors.addEventListener('click', () => this.#subWindowManager.toggleWindow('colorPicker'));
+    sectionColors.style.cursor = 'pointer';
     panel.appendChild(sectionColors);
 
     // Separator 3
@@ -1051,23 +1042,12 @@ class CorePanel {
     sep3.className = 'panel-sep';
     panel.appendChild(sep3);
 
-    // Section Sizes
+    // Section Sizes — replaced by SubWindow sizeSelector
     const sectionSizes = document.createElement('div');
     sectionSizes.className = 'panel-section panel-section-sizes';
-
-    const sizes = document.createElement('div');
-    sizes.id = 'panelSizes';
-    const sizeList = [2, 4, 8, 16];
-    sizeList.forEach((size, i) => {
-      const btn = document.createElement('button');
-      btn.className = 'panel-size-btn' + (i === 2 ? ' active' : '');
-      btn.dataset.size = size;
-      btn.style.width = (size + 4) + 'px';
-      btn.style.height = (size + 4) + 'px';
-      btn.addEventListener('click', () => this.#selectSize(size));
-      sizes.appendChild(btn);
-    });
-    sectionSizes.appendChild(sizes);
+    sectionSizes.innerHTML = '<div class="panel-section-info" style="color:rgba(255,255,255,0.3);font-size:0.7em;">Taille → fenêtre</div>';
+    sectionSizes.addEventListener('click', () => this.#subWindowManager.toggleWindow('sizeSelector'));
+    sectionSizes.style.cursor = 'pointer';
     panel.appendChild(sectionSizes);
 
     // Separator 4
@@ -1139,22 +1119,28 @@ class CorePanel {
   }
 
   #selectColor(color) {
-    this.#el.querySelectorAll('.panel-color-btn').forEach(b => b.classList.remove('active'));
-    this.#el.querySelector(`[data-color="${color}"]`).classList.add('active');
+    document.querySelectorAll('.panel-color-btn').forEach(b => b.classList.remove('active'));
+    const btn = document.querySelector(`.panel-color-btn[data-color="${color}"]`);
+    if (btn) btn.classList.add('active');
     if (this.#selectionManager.selectedPath) {
       this.#stateMachine.updateSelectedPath({ color });
     }
     this.#stateMachine.currentColor = color;
   }
 
+  selectColor(color) { this.#selectColor(color); }
+
   #selectSize(size) {
-    this.#el.querySelectorAll('.panel-size-btn').forEach(b => b.classList.remove('active'));
-    this.#el.querySelector(`[data-size="${size}"]`).classList.add('active');
+    document.querySelectorAll('.panel-size-btn').forEach(b => b.classList.remove('active'));
+    const btn = document.querySelector(`.panel-size-btn[data-size="${size}"]`);
+    if (btn) btn.classList.add('active');
     if (this.#selectionManager.selectedPath) {
       this.#stateMachine.updateSelectedPath({ size });
     }
     this.#stateMachine.currentSize = size;
   }
+
+  selectSize(size) { this.#selectSize(size); }
 
   syncSelection(path) {
     const section = this.#el.querySelector('#panelSelection');
@@ -1173,11 +1159,11 @@ class CorePanel {
     if (selSize) selSize.textContent = path.size + 'px';
     if (selPoints) selPoints.textContent = path.points ? path.points.length : 0;
 
-    this.#el.querySelectorAll('.panel-color-btn').forEach(b => b.classList.remove('active'));
-    const colorBtn = this.#el.querySelector(`[data-color="${path.color}"]`);
+    document.querySelectorAll('.panel-color-btn').forEach(b => b.classList.remove('active'));
+    const colorBtn = document.querySelector(`.panel-color-btn[data-color="${path.color}"]`);
     if (colorBtn) colorBtn.classList.add('active');
-    this.#el.querySelectorAll('.panel-size-btn').forEach(b => b.classList.remove('active'));
-    const sizeBtn = this.#el.querySelector(`[data-size="${path.size}"]`);
+    document.querySelectorAll('.panel-size-btn').forEach(b => b.classList.remove('active'));
+    const sizeBtn = document.querySelector(`.panel-size-btn[data-size="${path.size}"]`);
     if (sizeBtn) sizeBtn.classList.add('active');
   }
 
