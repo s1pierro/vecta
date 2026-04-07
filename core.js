@@ -2306,20 +2306,19 @@ class DrawArea {
       if (this._pinchDocCenter) {
         this.#zoomAt(this._pinchDocCenter.x, this._pinchDocCenter.y, e.scale / this._pinchLastScale);
       }
-      // Pan: move view to follow center displacement
+      // Pan: convert screen center movement to document delta
+      const cx = (e.x1 + e.x2) / 2;
+      const cy = (e.y1 + e.y2) / 2;
       if (this._pinchScreenCenter) {
-        const cx = (e.x1 + e.x2) / 2;
-        const cy = (e.y1 + e.y2) / 2;
-        const dx = cx - this._pinchScreenCenter.x;
-        const dy = cy - this._pinchScreenCenter.y;
-        if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) {
-          // Convert screen delta to document delta
-          const docDx = dx / this.#zoom;
-          const docDy = dy / this.#zoom;
+        const oldDoc = this.#screenToDoc(this._pinchScreenCenter.x, this._pinchScreenCenter.y);
+        const newDoc = this.#screenToDoc(cx, cy);
+        const docDx = newDoc.x - oldDoc.x;
+        const docDy = newDoc.y - oldDoc.y;
+        if (Math.abs(docDx) > 0.5 || Math.abs(docDy) > 0.5) {
           this.#pan(docDx, docDy);
-          this._pinchScreenCenter = { x: cx, y: cy };
         }
       }
+      this._pinchScreenCenter = { x: cx, y: cy };
       this._pinchLastScale = e.scale;
     });
     overlay.engine.on('pinchEnd', () => {
