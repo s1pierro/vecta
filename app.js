@@ -78,13 +78,13 @@ class Application {
 
   #init() {
     this.#touchOverlay = new TouchOverlay(this.#drawArea.touchOverlayElement, {
-      dist: 0,
+      dist: 5,
       tappingToPressingFrontier: 600,
       pressingToLongPressingFrontier: 1950,
       contactSize: 24,
       cursorSize: 14,
       rodEnabled: true,
-      pulseEnabled: true
+      pulseEnabled: false
     });
 
     this.#drawArea.bindDrawEvents(this.#touchOverlay);
