@@ -1273,9 +1273,9 @@ class CorePanel {
     toolSep.className = 'topbar-sep';
 
     const toolDefs = [
-      { id: 'toolDraw', tool: 'draw', icon: 'M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z', label: 'Dessin' },
+      { id: 'toolDraw', tool: 'draw', icon: 'M3 17l3-6 3 6 3-6 3 6', label: 'Dessin', zigzag: true },
       { id: 'toolSelect', tool: 'select', icon: 'M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z', label: 'Sélection' },
-      { id: 'toolPan', tool: 'pan', icon: 'M5 9l-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20', label: 'Pan' }
+      { id: 'toolNodes', tool: 'select', icon: 'M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z', label: 'Nœuds', isNodes: true }
     ];
 
     // GNOME2-style horizontal window list
@@ -1296,7 +1296,14 @@ class CorePanel {
       btn.dataset.tool = td.tool;
       btn.title = td.label;
       btn.innerHTML = `<svg viewBox="0 0 24 24" style="width:16px;height:16px"><path d="${td.icon}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-      btn.addEventListener('click', () => this.#selectTool(td.tool));
+      btn.addEventListener('click', () => {
+        if (td.isNodes) {
+          this.#selectTool(td.tool);
+          this.#toggleSelectMode();
+        } else {
+          this.#selectTool(td.tool);
+        }
+      });
       bar.appendChild(btn);
     });
     bar.appendChild(toolSep);
