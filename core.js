@@ -103,6 +103,147 @@ class State {
 }
 
 /**
+ * EventBus — global event bus with single-consumption semantics.
+ *
+ * Events are transient: once emitted, they are queued until a subscriber
+ * arrives, then consumed and removed. Each event is processed exactly once.
+ */
+class EventBus {
+  #listeners = new Map();   // event -> Set<{cb, once}>
+  #pending = new Map();     // event -> Array<{data}>
+
+  /**
+   * Subscribe to an event.
+   * If pending events exist for this type, they are consumed immediately and cleared.
+   * @param {string} event
+   * @param {Function} cb
+   * @param {boolean} [once=false] — auto-unsubscribe after first trigger
+   */
+  on(event, cb, once = false) {
+    if (!this.#listeners.has(event)) this.#listeners.set(event, new Set());
+    this.#listeners.get(event).add({ cb, once });
+
+    // Consume pending events immediately
+    if (this.#pending.has(event)) {
+      const pending = this.#pending.get(event);
+      for (const { data } of pending) {
+        cb(data);
+      }
+      this.#pending.delete(event);
+    }
+  }
+
+  /**
+   * Subscribe to an event once (auto-unsubscribe after first trigger).
+   */
+  once(event, cb) {
+    this.on(event, cb, true);
+  }
+
+  /**
+   * Unsubscribe from an event.
+   */
+  off(event, cb) {
+    const set = this.#listeners.get(event);
+    if (!set) return;
+    for (const entry of set) {
+      if (entry.cb === cb) {
+        set.delete(entry);
+        break;
+      }
+    }
+    if (set.size === 0) this.#listeners.delete(event);
+  }
+
+  /**
+   * Emit an event.
+   * Notifies all current subscribers, removes 'once' listeners after delivery.
+   * If no subscribers, queues the event for future consumers.
+   * @param {string} event
+   * @param {*} data
+   */
+  emit(event, data) {
+    const set = this.#listeners.get(event);
+    if (!set || set.size === 0) {
+      // No subscribers — queue the event
+      if (!this.#pending.has(event)) this.#pending.set(event, []);
+      this.#pending.get(event).push({ data });
+      // Cap queue at 50 to prevent memory leak
+      if (this.#pending.get(event).length > 50) this.#pending.get(event).shift();
+      return;
+    }
+
+    // Notify all current subscribers
+    const toRemove = [];
+    for (const entry of set) {
+      entry.cb(data);
+      if (entry.once) toRemove.push(entry);
+    }
+
+    // Remove one-time listeners
+    for (const entry of toRemove) {
+      set.delete(entry);
+    }
+    if (set.size === 0) this.#listeners.delete(event);
+  }
+
+  /**
+   * Check if an event has subscribers.
+   */
+  hasListeners(event) {
+    const set = this.#listeners.get(event);
+    return set && set.size > 0;
+  }
+
+  /**
+   * Get count of pending events for an event type.
+   */
+  pendingCount(event) {
+    const q = this.#pending.get(event);
+    return q ? q.length : 0;
+  }
+
+  /**
+   * Clear all pending events for a type (or all types).
+   */
+  clearPending(event) {
+    if (event) this.#pending.delete(event);
+    else this.#pending.clear();
+  }
+
+  /**
+   * Internal: emit directly to current listeners of an event (for eventLog).
+   * Does NOT log or queue — just notifies subscribers.
+   * @internal
+   */
+  _emitDirect(event, data) {
+    const set = this.#listeners.get(event);
+    if (!set) return;
+    const toRemove = [];
+    for (const entry of set) {
+      entry.cb(data);
+      if (entry.once) toRemove.push(entry);
+    }
+    for (const entry of toRemove) set.delete(entry);
+    if (set.size === 0) this.#listeners.delete(event);
+  }
+
+  /**
+   * Drain all pending events into a flat array (for debugging).
+   */
+  drain() {
+    const all = [];
+    for (const [event, entries] of this.#pending) {
+      for (const entry of entries) {
+        all.push({ event, ...entry });
+      }
+    }
+    this.#pending.clear();
+    return all;
+  }
+}
+
+/**
  * StateLoader — loads state definitions from localStorage or server.
  *
  * Flow:
@@ -258,11 +399,14 @@ class SelectionManager {
       // Switching to node mode — keep selectedPath as active path
       this.#setState(this.#selectedPath ? SelectionState.NODES_SELECTED : SelectionState.PATH_SELECTED);
     }
-    this.#emit('selectModeChange', { mode: this.#selectMode });
+    this.#dispatch('selectModeChange', { mode: this.#selectMode });
     this.#emitSelectionChange();
   }
 
   // ─── Event system ──────────────────────────────────────
+
+  /** Alias: dispatch is emit (for API consistency with StateMachine) */
+  #dispatch(event, data) { this.#emit(event, data); }
 
   on(event, callback) {
     if (!this.#listeners[event]) this.#listeners[event] = [];
@@ -300,7 +444,7 @@ class SelectionManager {
       if (path) {
         this.#type = SelectionType.OBJECT; // temporarily object until nodes selected
         this.#setState(SelectionState.PATH_SELECTED);
-        this.#emit('pathSelected', { path });
+        this.#dispatch('pathSelected', { path });
       } else {
         this.#setState(SelectionState.IDLE);
         if (prev) this.#emit('pathDeselected', { path: prev });
@@ -313,10 +457,10 @@ class SelectionManager {
       if (path) {
         this.#type = SelectionType.OBJECT;
         this.#setState(SelectionState.PATH_SELECTED);
-        this.#emit('pathSelected', { path });
+        this.#dispatch('pathSelected', { path });
       } else if (prev) {
         this.#setState(SelectionState.IDLE);
-        this.#emit('pathDeselected', { path: prev });
+        this.#dispatch('pathDeselected', { path: prev });
       }
     }
 
@@ -352,11 +496,11 @@ class SelectionManager {
     if (sorted.length > 0) {
       this.#type = SelectionType.NODE;
       this.#setState(SelectionState.NODES_SELECTED);
-      this.#emit('nodesSelected', { path: this.#selectedPath, nodes: sorted });
+      this.#dispatch('nodesSelected', { path: this.#selectedPath, nodes: sorted });
     } else {
       this.#type = SelectionType.OBJECT;
       this.#setState(this.#selectedPath ? SelectionState.PATH_SELECTED : SelectionState.IDLE);
-      this.#emit('nodesDeselected', { path: this.#selectedPath });
+      this.#dispatch('nodesDeselected', { path: this.#selectedPath });
     }
 
     this.#syncToStateMachine();
@@ -393,14 +537,14 @@ class SelectionManager {
     this.#dragHandle = handleInfo;
     this.#type = SelectionType.NODE_HANDLE;
     this.#setState(SelectionState.HANDLE_DRAGGING);
-    this.#emit('handleDragStart', { handle: handleInfo, path: this.#selectedPath, nodes: this.#selectedNodes });
+    this.#dispatch('handleDragStart', { handle: handleInfo, path: this.#selectedPath, nodes: this.#selectedNodes });
     this.#emitSelectionChange();
   }
 
   handleDrag(handleInfo) {
     if (!this.#dragHandle) return;
     this.#dragHandle = handleInfo;
-    this.#emit('handleDrag', { handle: handleInfo, path: this.#selectedPath, nodes: this.#selectedNodes });
+    this.#dispatch('handleDrag', { handle: handleInfo, path: this.#selectedPath, nodes: this.#selectedNodes });
   }
 
   endHandleDrag() {
@@ -417,7 +561,7 @@ class SelectionManager {
     } else {
       this.#setState(SelectionState.IDLE);
     }
-    this.#emit('handleDragEnd', { handle, path: this.#selectedPath, nodes: this.#selectedNodes });
+    this.#dispatch('handleDragEnd', { handle, path: this.#selectedPath, nodes: this.#selectedNodes });
     this.#emitSelectionChange();
   }
 
@@ -427,14 +571,14 @@ class SelectionManager {
     this.#boxRect = { ...rect };
     this.#type = SelectionType.BOX;
     this.#setState(SelectionState.BOX_DRAGGING);
-    this.#emit('boxStart', { rect: this.#boxRect });
+    this.#dispatch('boxStart', { rect: this.#boxRect });
     this.#emitSelectionChange();
   }
 
   updateBox(rect) {
     if (!this.#boxRect) return;
     this.#boxRect = { ...rect };
-    this.#emit('boxChange', { rect: this.#boxRect });
+    this.#dispatch('boxChange', { rect: this.#boxRect });
   }
 
   endBox(rect, foundPathOrNodes) {
@@ -452,7 +596,7 @@ class SelectionManager {
       }
     }
 
-    this.#emit('boxEnd', { rect, selection: foundPathOrNodes });
+    this.#dispatch('boxEnd', { rect, selection: foundPathOrNodes });
     this.#emitSelectionChange();
   }
 
@@ -479,12 +623,12 @@ class SelectionManager {
   #setState(newState) {
     if (this.#state !== newState) {
       this.#state = newState;
-      this.#emit('stateChange', newState);
+      this.#dispatch('stateChange', newState);
     }
   }
 
   #emitSelectionChange() {
-    this.#emit('selectionChange', {
+    this.#dispatch('selectionChange', {
       type: this.#type,
       state: this.#state,
       path: this.#selectedPath,
@@ -575,7 +719,7 @@ function douglasPeucker(points, tolerance) {
 
 class StateMachine {
   #state;
-  #listeners;
+  #bus = new EventBus();
   #history = [];
   #historyIndex = -1;
   #maxHistory = 50;
@@ -602,7 +746,6 @@ class StateMachine {
       selectedNodes: [],
       selectMode: 'object'  // 'object' | 'node'
     };
-    this.#listeners = {};
     this.#saveState();
     // States loaded async via loadStates()
   }
@@ -811,7 +954,7 @@ class StateMachine {
     // Emit activateEvents
     for (const evt of state.activateEvents) {
       const [eventType, ...rest] = evt.split(':');
-      this.#emit(eventType, rest.join(':') || name);
+      this.#dispatch(eventType, rest.join(':') || name);
     }
 
     return true;
@@ -830,7 +973,7 @@ class StateMachine {
     if (state) {
       for (const evt of state.quitEvents) {
         const [eventType, ...rest] = evt.split(':');
-        this.#emit(eventType, rest.join(':') || name);
+        this.#dispatch(eventType, rest.join(':') || name);
       }
     }
 
@@ -877,9 +1020,9 @@ class StateMachine {
     this.#state.selectedPath = v;
     this.#state.selectedNodes = v ? [] : [];
     this.#state.selectables = v ? 'nodes' : 'objects';
-    this.#emit('selectedNodesChange', this.#state.selectedNodes);
-    this.#emit('selectablesChange', this.#state.selectables);
-    this.#emit('selectedPathChange', v);
+    this.#dispatch('selectedNodesChange', this.#state.selectedNodes);
+    this.#dispatch('selectablesChange', this.#state.selectables);
+    this.#dispatch('selectedPathChange', v);
   }
 
   /**
@@ -888,8 +1031,8 @@ class StateMachine {
   _setSelectedNodesDirect(v) {
     this.#state.selectedNodes = v || [];
     this.#state.selectables = this.#state.selectedNodes.length > 0 ? 'nodeSelection' : 'nodes';
-    this.#emit('selectedNodesChange', this.#state.selectedNodes);
-    this.#emit('selectablesChange', this.#state.selectables);
+    this.#dispatch('selectedNodesChange', this.#state.selectedNodes);
+    this.#dispatch('selectablesChange', this.#state.selectables);
   }
 
   get state() {
@@ -911,16 +1054,16 @@ class StateMachine {
   }
 
   get currentColor() { return this.#state.currentColor; }
-  set currentColor(v) { this.#state.currentColor = v; this.#emit('colorChange', v); }
+  set currentColor(v) { this.#state.currentColor = v; this.#dispatch('colorChange', v); }
 
   get currentSize() { return this.#state.currentSize; }
-  set currentSize(v) { this.#state.currentSize = v; this.#emit('sizeChange', v); }
+  set currentSize(v) { this.#state.currentSize = v; this.#dispatch('sizeChange', v); }
 
   get paths() { return this.#state.paths; }
-  set paths(v) { this.#state.paths = v; this.#emit('pathsChange', v); }
+  set paths(v) { this.#state.paths = v; this.#dispatch('pathsChange', v); }
 
   get currentPath() { return this.#state.currentPath; }
-  set currentPath(v) { this.#state.currentPath = v; this.#emit('currentPathChange', v); }
+  set currentPath(v) { this.#state.currentPath = v; this.#dispatch('currentPathChange', v); }
 
   get selectedPath() {
     return this.#selectionManager
@@ -934,9 +1077,9 @@ class StateMachine {
       this.#state.selectedPath = v;
       this.#state.selectedNodes = v ? [] : [];
       this.#state.selectables = v ? 'nodes' : 'objects';
-      this.#emit('selectedNodesChange', this.#state.selectedNodes);
-      this.#emit('selectablesChange', this.#state.selectables);
-      this.#emit('selectedPathChange', v);
+      this.#dispatch('selectedNodesChange', this.#state.selectedNodes);
+      this.#dispatch('selectablesChange', this.#state.selectables);
+      this.#dispatch('selectedPathChange', v);
     }
   }
 
@@ -951,8 +1094,8 @@ class StateMachine {
     } else {
       this.#state.selectedNodes = v || [];
       this.#state.selectables = this.#state.selectedNodes.length > 0 ? 'nodeSelection' : 'nodes';
-      this.#emit('selectedNodesChange', this.#state.selectedNodes);
-      this.#emit('selectablesChange', this.#state.selectables);
+      this.#dispatch('selectedNodesChange', this.#state.selectedNodes);
+      this.#dispatch('selectablesChange', this.#state.selectables);
     }
   }
 
@@ -974,7 +1117,7 @@ class StateMachine {
   set selectables(v) {
     if (!this.#selectionManager) {
       this.#state.selectables = v;
-      this.#emit('selectablesChange', v);
+      this.#dispatch('selectablesChange', v);
     }
   }
 
@@ -988,22 +1131,26 @@ class StateMachine {
       this.#selectionManager.setSelectMode(v);
     } else {
       this.#state.selectMode = v;
-      this.#emit('selectModeChange', v);
+      this.#dispatch('selectModeChange', v);
     }
   }
 
-  on(event, callback) {
-    if (!this.#listeners[event]) this.#listeners[event] = [];
-    this.#listeners[event].push(callback);
+  /** Subscribe to an event via the bus. */
+  on(event, callback, once = false) {
+    this.#bus.on(event, callback, once);
   }
 
+  /** Unsubscribe from an event. */
   off(event, callback) {
-    if (!this.#listeners[event]) return;
-    this.#listeners[event] = this.#listeners[event].filter(cb => cb !== callback);
+    this.#bus.off(event, callback);
   }
 
-  #emit(event, data) {
-    // Log event (circular buffer, max 200) — but NOT eventLog itself to avoid infinite recursion
+  /**
+   * Dispatch an event: log it + emit via bus.
+   * Uses internal dispatch to avoid eventLog recursion.
+   */
+  #dispatch(event, data) {
+    // Log event (circular buffer, max 200) — but NOT eventLog itself
     if (event !== 'eventLog') {
       const entry = {
         event,
@@ -1013,15 +1160,14 @@ class StateMachine {
       this.#eventLog.push(entry);
       if (this.#eventLog.length > this.#maxEventLog) this.#eventLog.shift();
     }
-    // Fire eventLog listeners directly without going through #emit again
-    if (event !== 'eventLog' && this.#listeners['eventLog']) {
+    // Notify eventLog subscribers directly (avoid recursion)
+    if (event !== 'eventLog' && this.#bus.hasListeners('eventLog')) {
       const entry = this.#eventLog[this.#eventLog.length - 1];
-      this.#listeners['eventLog'].forEach(cb => cb(entry));
+      // Direct call to bus's internal listeners for eventLog
+      this.#bus._emitDirect('eventLog', entry);
     }
 
-    if (this.#listeners[event]) {
-      this.#listeners[event].forEach(cb => cb(data));
-    }
+    this.#bus.emit(event, data);
   }
 
   get eventLog() { return [...this.#eventLog]; }
@@ -1046,12 +1192,12 @@ class StateMachine {
     this.#state.paths = JSON.parse(JSON.stringify(snapshot.paths));
     this.#state.selectedPath = null;
     this.#state.selectMode = snapshot.selectMode || 'object';
-    this.#emit('pathsChange', this.#state.paths);
-    this.#emit('modeChange', this.#state.mode);
-    this.#emit('toolChange', this.#state.currentTool);
-    this.#emit('colorChange', this.#state.currentColor);
-    this.#emit('sizeChange', this.#state.currentSize);
-    this.#emit('selectModeChange', this.#state.selectMode);
+    this.#dispatch('pathsChange', this.#state.paths);
+    this.#dispatch('modeChange', this.#state.mode);
+    this.#dispatch('toolChange', this.#state.currentTool);
+    this.#dispatch('colorChange', this.#state.currentColor);
+    this.#dispatch('sizeChange', this.#state.currentSize);
+    this.#dispatch('selectModeChange', this.#state.selectMode);
   }
 
   #saveState() {
@@ -1063,14 +1209,14 @@ class StateMachine {
       this.#history.shift();
     }
     this.#historyIndex = this.#history.length - 1;
-    this.#emit('historyChange');
+    this.#dispatch('historyChange');
   }
 
   undo() {
     if (this.#historyIndex > 0) {
       this.#historyIndex--;
       this.#restoreState(this.#history[this.#historyIndex]);
-      this.#emit('historyChange');
+      this.#dispatch('historyChange');
     }
   }
 
@@ -1078,7 +1224,7 @@ class StateMachine {
     if (this.#historyIndex < this.#history.length - 1) {
       this.#historyIndex++;
       this.#restoreState(this.#history[this.#historyIndex]);
-      this.#emit('historyChange');
+      this.#dispatch('historyChange');
     }
   }
 
@@ -1087,7 +1233,7 @@ class StateMachine {
 
   addPath(path) {
     this.#state.paths.push(path);
-    this.#emit('pathsChange', this.#state.paths);
+    this.#dispatch('pathsChange', this.#state.paths);
     this.#saveState();
   }
 
@@ -1095,7 +1241,7 @@ class StateMachine {
     const path = this.#selectionManager ? this.#selectionManager.selectedPath : this.#state.selectedPath;
     if (path) {
       Object.assign(path, props);
-      this.#emit('pathsChange', this.#state.paths);
+      this.#dispatch('pathsChange', this.#state.paths);
       this.#saveState();
     }
   }
@@ -1104,7 +1250,7 @@ class StateMachine {
     const path = this.#selectionManager ? this.#selectionManager.selectedPath : this.#state.selectedPath;
     if (!path) return;
     path.points = douglasPeucker(path.points, tolerance);
-    this.#emit('pathsChange', this.#state.paths);
+    this.#dispatch('pathsChange', this.#state.paths);
     this.#saveState();
   }
 
@@ -1121,10 +1267,10 @@ class StateMachine {
     } else {
       this.#state.selectedNodes = [];
       this.#state.selectables = 'nodes';
-      this.#emit('selectedNodesChange', this.#state.selectedNodes);
-      this.#emit('selectablesChange', this.#state.selectables);
+      this.#dispatch('selectedNodesChange', this.#state.selectedNodes);
+      this.#dispatch('selectablesChange', this.#state.selectables);
     }
-    this.#emit('pathsChange', this.#state.paths);
+    this.#dispatch('pathsChange', this.#state.paths);
     this.#saveState();
   }
 
@@ -1152,9 +1298,9 @@ class StateMachine {
       selMgr.selectNodes(updated);
     } else {
       this.#state.selectedNodes = updated;
-      this.#emit('selectedNodesChange', this.#state.selectedNodes);
+      this.#dispatch('selectedNodesChange', this.#state.selectedNodes);
     }
-    this.#emit('pathsChange', this.#state.paths);
+    this.#dispatch('pathsChange', this.#state.paths);
     this.#saveState();
   }
 
@@ -1216,7 +1362,7 @@ class StateMachine {
         }
       }
     });
-    this.#emit('pathsChange', this.#state.paths);
+    this.#dispatch('pathsChange', this.#state.paths);
     this.#saveState();
   }
 
@@ -1247,13 +1393,13 @@ class StateMachine {
 
   clearCanvas() {
     this.#state.paths = [];
-    this.#emit('clearCanvas');
+    this.#dispatch('clearCanvas');
     this.#saveState();
   }
 
   setMode(newMode) {
     this.#state.currentPath = null;
-    this.#emit('currentPathChange', null);
+    this.#dispatch('currentPathChange', null);
     if (this.#selectionManager) {
       if (newMode !== 'selection') {
         this.#selectionManager.clear();
@@ -1263,7 +1409,7 @@ class StateMachine {
       if (newMode !== 'selection') {
         this.#state.selectedPath = null;
         this.#state.selectables = 'objects';
-        this.#emit('selectedPathChange', null);
+        this.#dispatch('selectedPathChange', null);
       }
     }
     this.mode = newMode; // triggers activateState
