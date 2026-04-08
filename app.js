@@ -628,7 +628,7 @@ class Application {
       height: '50vh'
     });
 
-    // Color picker SubWindow with custom color selector
+    // Color picker SubWindow with integrated color selector
     const COLOR_STORAGE_KEY = 'vectux_colors';
 
     const loadColors = () => {
@@ -649,7 +649,7 @@ class Application {
       const body = document.createElement('div');
       body.style.cssText = 'display:flex;flex-direction:column;gap:8px;padding:8px;';
 
-      // Color grid
+      // Color grid (palette)
       const grid = document.createElement('div');
       grid.className = 'color-grid';
       grid.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;justify-content:center;';
@@ -660,22 +660,181 @@ class Application {
       sep.style.cssText = 'height:1px;background:rgba(255,255,255,0.08);width:100%;';
       body.appendChild(sep);
 
-      // Custom color row
-      const customRow = document.createElement('div');
-      customRow.style.cssText = 'display:flex;gap:6px;align-items:center;justify-content:center;';
+      // Integrated color selector
+      const selector = document.createElement('div');
+      selector.className = 'color-selector-integrated';
+      selector.style.cssText = 'display:flex;flex-direction:column;gap:6px;align-items:center;';
 
-      const colorInput = document.createElement('input');
-      colorInput.type = 'color';
-      colorInput.value = '#000000';
-      colorInput.style.cssText = 'width:32px;height:32px;border:none;border-radius:4px;cursor:pointer;background:transparent;padding:0;';
-      customRow.appendChild(colorInput);
+      // Saturation/Brightness canvas
+      const sbCanvas = document.createElement('canvas');
+      sbCanvas.width = 180;
+      sbCanvas.height = 120;
+      sbCanvas.style.cssText = 'width:180px;height:120px;border-radius:4px;cursor:crosshair;border:1px solid rgba(255,255,255,0.15);';
+      selector.appendChild(sbCanvas);
+
+      // Hue slider
+      const hueRow = document.createElement('div');
+      hueRow.style.cssText = 'display:flex;gap:6px;align-items:center;width:100%;';
+
+      const hueCanvas = document.createElement('canvas');
+      hueCanvas.width = 180;
+      hueCanvas.height = 16;
+      hueCanvas.style.cssText = 'width:180px;height:16px;border-radius:4px;cursor:crosshair;border:1px solid rgba(255,255,255,0.15);flex:1;';
+      hueRow.appendChild(hueCanvas);
+      selector.appendChild(hueRow);
+
+      // Preview + Add button
+      const previewRow = document.createElement('div');
+      previewRow.style.cssText = 'display:flex;gap:6px;align-items:center;';
+
+      const preview = document.createElement('div');
+      preview.id = 'colorPreview';
+      preview.style.cssText = 'width:32px;height:32px;border-radius:4px;border:2px solid rgba(255,255,255,0.3);';
+      previewRow.appendChild(preview);
 
       const addBtn = document.createElement('button');
-      addBtn.className = 'color-add-btn';
-      addBtn.style.cssText = 'width:32px;height:32px;border-radius:4px;border:1px solid rgba(255,255,255,0.2);background:rgba(105,240,174,0.1);color:#69f0ae;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;';
-      addBtn.textContent = '+';
-      customRow.appendChild(addBtn);
-      body.appendChild(customRow);
+      addBtn.style.cssText = 'padding:4px 12px;background:rgba(105,240,174,0.1);border:1px solid rgba(105,240,174,0.3);border-radius:3px;color:#69f0ae;cursor:pointer;font-size:0.7em;';
+      addBtn.textContent = '+ Add';
+      previewRow.appendChild(addBtn);
+      selector.appendChild(previewRow);
+
+      body.appendChild(selector);
+
+      // State
+      let hue = 0;       // 0-360
+      let sat = 1;       // 0-1
+      let bri = 1;       // 0-1
+
+      function hslToHex(h, s, l) {
+        // HSL to hex (using brightness as lightness)
+        s /= 100; l /= 100;
+        const a = s * Math.min(l, 1 - l);
+        const f = n => {
+          const k = (n + h / 30) % 12;
+          const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
+          return Math.round(255 * color).toString(16).padStart(2, '0');
+        };
+        return `#${f(0)}${f(8)}${f(4)}`;
+      }
+
+      function hsvToHex(h, s, v) {
+        // HSV to hex
+        const c = v * s;
+        const x = c * (1 - Math.abs((h / 60) % 2 - 1));
+        const m = v - c;
+        let r, g, b;
+        if (h < 60) { r = c; g = x; b = 0; }
+        else if (h < 120) { r = x; g = c; b = 0; }
+        else if (h < 180) { r = 0; g = c; b = x; }
+        else if (h < 240) { r = 0; g = x; b = c; }
+        else if (h < 300) { r = x; g = 0; b = c; }
+        else { r = c; g = 0; b = x; }
+        const toHex = v => Math.round((v + m) * 255).toString(16).padStart(2, '0');
+        return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+      }
+
+      function updatePreview() {
+        const hex = hsvToHex(hue, sat, bri);
+        preview.style.background = hex;
+      }
+
+      function drawSBMap() {
+        const ctx = sbCanvas.getContext('2d');
+        const w = sbCanvas.width, h = sbCanvas.height;
+        // Draw saturation (x) vs brightness (y) for current hue
+        for (let x = 0; x < w; x++) {
+          for (let y = 0; y < h; y++) {
+            const s = x / w;
+            const v = 1 - y / h;
+            ctx.fillStyle = hsvToHex(hue, s, v);
+            ctx.fillRect(x, y, 1, 1);
+          }
+        }
+        // Draw cursor
+        const cx = sat * w;
+        const cy = (1 - bri) * h;
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(cx, cy, 5, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(cx, cy, 5, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      function drawHueBar() {
+        const ctx = hueCanvas.getContext('2d');
+        const w = hueCanvas.width, h = hueCanvas.height;
+        for (let x = 0; x < w; x++) {
+          const hh = (x / w) * 360;
+          ctx.fillStyle = `hsl(${hh}, 100%, 50%)`;
+          ctx.fillRect(x, 0, 1, h);
+        }
+        // Draw cursor
+        const cx = (hue / 360) * w;
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(cx, h / 2, 6, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(cx, h / 2, 6, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      // SB canvas interaction
+      let sbDragging = false;
+      const handleSB = (e) => {
+        const rect = sbCanvas.getBoundingClientRect();
+        const scaleX = sbCanvas.width / rect.width;
+        const scaleY = sbCanvas.height / rect.height;
+        sat = Math.max(0, Math.min(1, (e.clientX - rect.left) * scaleX / sbCanvas.width));
+        bri = Math.max(0, Math.min(1, 1 - (e.clientY - rect.top) * scaleY / sbCanvas.height));
+        drawSBMap();
+        updatePreview();
+      };
+      sbCanvas.addEventListener('mousedown', (e) => { sbDragging = true; handleSB(e); });
+      sbCanvas.addEventListener('touchstart', (e) => { sbDragging = true; handleSB(e.touches[0]); }, { passive: true });
+      window.addEventListener('mousemove', (e) => { if (sbDragging) handleSB(e); });
+      window.addEventListener('touchmove', (e) => { if (sbDragging) handleSB(e.touches[0]); }, { passive: true });
+      window.addEventListener('mouseup', () => { sbDragging = false; });
+      window.addEventListener('touchend', () => { sbDragging = false; });
+
+      // Hue bar interaction
+      let hueDragging = false;
+      const handleHue = (clientX) => {
+        const rect = hueCanvas.getBoundingClientRect();
+        hue = Math.max(0, Math.min(360, ((clientX - rect.left) / rect.width) * 360));
+        drawHueBar();
+        drawSBMap();
+        updatePreview();
+      };
+      hueCanvas.addEventListener('mousedown', (e) => { hueDragging = true; handleHue(e.clientX); });
+      hueCanvas.addEventListener('touchstart', (e) => { hueDragging = true; handleHue(e.touches[0].clientX); }, { passive: true });
+      window.addEventListener('mousemove', (e) => { if (hueDragging) handleHue(e.clientX); });
+      window.addEventListener('touchmove', (e) => { if (hueDragging) handleHue(e.touches[0].clientX); }, { passive: true });
+      window.addEventListener('mouseup', () => { hueDragging = false; });
+      window.addEventListener('touchend', () => { hueDragging = false; });
+
+      // Add button
+      addBtn.addEventListener('click', () => {
+        const hex = hsvToHex(hue, sat, bri);
+        if (!colors.includes(hex)) {
+          colors.push(hex);
+          saveColors(colors);
+          renderGrid();
+        }
+      });
+
+      // Initial draw
+      drawHueBar();
+      drawSBMap();
+      updatePreview();
 
       const renderGrid = () => {
         grid.innerHTML = '';
@@ -685,7 +844,6 @@ class Application {
           btn.dataset.color = color;
           btn.style.cssText = `background:${color};width:32px;height:32px;border-radius:4px;border:2px solid rgba(255,255,255,0.2);cursor:pointer;position:relative;`;
 
-          // Delete button on hover (not for first 3 default colors)
           if (i >= 3) {
             btn.title = 'Click: select | Long press: remove';
             let pressTimer;
@@ -715,16 +873,6 @@ class Application {
 
       renderGrid();
 
-      addBtn.addEventListener('click', () => {
-        const c = colorInput.value;
-        if (!colors.includes(c)) {
-          colors.push(c);
-          saveColors(colors);
-          renderGrid();
-        }
-      });
-
-      // Listen for color changes to update active state
       this.#statesMachine.on('colorChange', () => renderGrid());
 
       return body;
@@ -735,7 +883,7 @@ class Application {
       content: colorContentFn,
       left: '60vw',
       top: '10vh',
-      width: '220px',
+      width: '210px',
       height: 'auto'
     });
 
