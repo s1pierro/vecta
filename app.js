@@ -653,7 +653,7 @@ class Application {
       logContainer.style.cssText = 'flex:1;overflow-y:auto;font-family:monospace;font-size:0.65em;max-height:60vh;';
       body.appendChild(logContainer);
 
-      // Populate initial log
+      // Populate initial log (newest first)
       const renderEntry = (entry) => {
         const row = document.createElement('div');
         row.style.cssText = 'display:flex;gap:6px;padding:2px 4px;border-bottom:1px solid rgba(255,255,255,0.03);';
@@ -669,12 +669,12 @@ class Application {
         row.appendChild(time);
         row.appendChild(evt);
         row.appendChild(dat);
-        logContainer.appendChild(row);
+        logContainer.prepend(row);
       };
 
       this.#statesMachine.eventLog.forEach(renderEntry);
 
-      // Subscribe to new events
+      // Subscribe to new events (prepend newest first)
       this.#statesMachine.on('eventLog', (entry) => {
         if (entry) renderEntry(entry);
       });
