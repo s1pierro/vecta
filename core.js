@@ -1273,9 +1273,9 @@ class CorePanel {
     toolSep.className = 'topbar-sep';
 
     const toolDefs = [
-      { id: 'toolDraw', tool: 'draw', icon: 'M3 17l3-6 3 6 3-6 3 6', label: 'Dessin', zigzag: true },
-      { id: 'toolSelect', tool: 'select', icon: 'M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z', label: 'Sélection' },
-      { id: 'toolNodes', tool: 'select', icon: 'M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z', label: 'Nœuds', isNodes: true }
+      { id: 'toolDraw', tool: 'draw', icon: 'M3 17l3-6 3 6 3-6 3 6', label: 'Dessin', mode: 'drawingTool' },
+      { id: 'toolSelect', tool: 'select', icon: 'M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z', label: 'Sélection', mode: 'selection' },
+      { id: 'toolNodes', tool: 'select', icon: 'M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z', label: 'Nœuds', mode: 'nodeEdit' }
     ];
 
     // GNOME2-style horizontal window list
@@ -1297,12 +1297,7 @@ class CorePanel {
       btn.title = td.label;
       btn.innerHTML = `<svg viewBox="0 0 24 24" style="width:16px;height:16px"><path d="${td.icon}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
       btn.addEventListener('click', () => {
-        if (td.isNodes) {
-          this.#selectTool(td.tool);
-          this.#toggleSelectMode();
-        } else {
-          this.#selectTool(td.tool);
-        }
+        this.#selectTool(td.tool, td.mode);
       });
       bar.appendChild(btn);
     });
@@ -1392,27 +1387,34 @@ class CorePanel {
    * Sync topbar tool button active states with internal state.
    */
   #syncToolButtons() {
-    const tool = this.#stateMachine.currentTool;
-    const selectMode = this.#selectionManager.selectMode;
+    const mode = this.#stateMachine.mode;
 
-    // Draw: active when tool === 'draw'
+    // Draw: active when mode === 'drawingTool'
     const drawBtn = document.getElementById('toolDraw');
-    if (drawBtn) drawBtn.classList.toggle('active', tool === 'draw');
+    if (drawBtn) drawBtn.classList.toggle('active', mode === 'drawingTool');
 
-    // Select: active when tool === 'select' && selectMode === 'object'
+    // Select: active when mode === 'selection'
     const selectBtn = document.getElementById('toolSelect');
-    if (selectBtn) selectBtn.classList.toggle('active', tool === 'select' && selectMode === SelectMode.OBJECT);
+    if (selectBtn) selectBtn.classList.toggle('active', mode === 'selection');
 
-    // Nodes: active when tool === 'select' && selectMode === 'node'
+    // Nodes: active when mode === 'nodeEdit'
     const nodesBtn = document.getElementById('toolNodes');
-    if (nodesBtn) nodesBtn.classList.toggle('active', tool === 'select' && selectMode === SelectMode.NODE);
+    if (nodesBtn) nodesBtn.classList.toggle('active', mode === 'nodeEdit');
   }
 
-  #selectTool(tool) {
+  #selectTool(tool, mode) {
+    if (mode) {
+      this.#stateMachine.setMode(mode);
+    }
     this.#stateMachine.currentTool = tool;
-    const modeMap = { draw: 'drawingTool', select: 'selection', pan: 'drawingTool' };
-    this.#stateMachine.setMode(modeMap[tool] || 'drawingTool');
     this.#syncToolButtons();
+
+    // When entering nodeEdit mode, ensure selection mode is on nodes
+    if (mode === 'nodeEdit') {
+      if (this.#selectionManager.selectMode !== SelectMode.NODE) {
+        this.#selectionManager.setSelectMode(SelectMode.NODE);
+      }
+    }
   }
 
   #toggleSelectMode() {
@@ -2256,7 +2258,7 @@ class DrawArea {
       if (this.#stateMachine.mode === 'drawingTool') {
         const pt = this.#screenToDoc(e.touchX, e.touchY);
         this.#stateMachine.currentPath = [{ x: pt.x, y: pt.y }];
-      } else if (this.#stateMachine.mode === 'selection') {
+      } else if (this.#stateMachine.mode === 'selection' || this.#stateMachine.mode === 'nodeEdit') {
         // In selection mode, cursorActivate starts a bbox (both object and node mode)
         const doc = this.#screenToDoc(e.touchX, e.touchY);
         this._selBBoxStart = doc;
@@ -2272,7 +2274,7 @@ class DrawArea {
           path.push({ x: pt.x, y: pt.y });
           this._redraw();
         }
-      } else if (this.#stateMachine.mode === 'selection') {
+      } else if (this.#stateMachine.mode === 'selection' || this.#stateMachine.mode === 'nodeEdit') {
         // Update bbox de sélection
         this._selBBoxCurrent = this.#screenToDoc(e.touchX, e.touchY);
         this._redraw();
@@ -2290,7 +2292,7 @@ class DrawArea {
           });
         }
         this.#stateMachine.currentPath = null;
-      } else if (this.#stateMachine.mode === 'selection') {
+      } else if (this.#stateMachine.mode === 'selection' || this.#stateMachine.mode === 'nodeEdit') {
         // End of bbox — perform additive selection
         if (this.#selectionManager.selectMode === SelectMode.OBJECT) {
           this._addPathsInBBox();

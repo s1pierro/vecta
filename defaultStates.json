@@ -22,6 +22,17 @@
     "tags": ["mode", "editing"]
   },
   {
+    "name": "nodeEdit",
+    "type": "mode",
+    "family": "appMode",
+    "exclusiveFields": ["mainMode"],
+    "priority": 0,
+    "activationCondition": null,
+    "maintainCondition": null,
+    "deactivationCondition": null,
+    "tags": ["mode", "nodeEditing"]
+  },
+  {
     "name": "draw",
     "type": "tool",
     "family": "currentTool",
