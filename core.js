@@ -1003,15 +1003,21 @@ class StateMachine {
   }
 
   #emit(event, data) {
-    // Log event (circular buffer, max 200)
-    const entry = {
-      event,
-      data: data !== undefined && data !== null ? (typeof data === 'object' ? JSON.stringify(data) : String(data)) : '',
-      time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-    };
-    this.#eventLog.push(entry);
-    if (this.#eventLog.length > this.#maxEventLog) this.#eventLog.shift();
-    this.#emit('eventLog', entry);
+    // Log event (circular buffer, max 200) — but NOT eventLog itself to avoid infinite recursion
+    if (event !== 'eventLog') {
+      const entry = {
+        event,
+        data: data !== undefined && data !== null ? (typeof data === 'object' ? JSON.stringify(data) : String(data)) : '',
+        time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+      };
+      this.#eventLog.push(entry);
+      if (this.#eventLog.length > this.#maxEventLog) this.#eventLog.shift();
+    }
+    // Fire eventLog listeners directly without going through #emit again
+    if (event !== 'eventLog' && this.#listeners['eventLog']) {
+      const entry = this.#eventLog[this.#eventLog.length - 1];
+      this.#listeners['eventLog'].forEach(cb => cb(entry));
+    }
 
     if (this.#listeners[event]) {
       this.#listeners[event].forEach(cb => cb(data));
