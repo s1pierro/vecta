@@ -1613,6 +1613,12 @@ class DrawArea {
   get svgElement() { return this.#svg; }
   get touchOverlayElement() { return this.#touchOverlay; }
   get container() { return this.#el; }
+  get zoom() { return this.#zoom; }
+  get viewBox() {
+    const vw = this.#DOC_W / this.#zoom;
+    const vh = this.#DOC_H / this.#zoom;
+    return { x: Math.round(this.#panX), y: Math.round(this.#panY), w: Math.round(vw), h: Math.round(vh) };
+  }
 
   buildDom(container) {
     const drawArea = document.createElement('div');

@@ -407,7 +407,9 @@ class Application {
       '<span><span class="label">Tool:</span><span class="value" id="statusTool">-</span></span>' +
       '<span><span class="label">Couleur:</span><span class="value" id="statusColor">-</span></span>' +
       '<span><span class="label">Taille:</span><span class="value" id="statusSize">-</span></span>' +
-      '<span><span class="label">Sélection:</span><span class="value" id="statusSelected">-</span></span>';
+      '<span><span class="label">Sélection:</span><span class="value" id="statusSelected">-</span></span>' +
+      '<span><span class="label">Zoom:</span><span class="value" id="statusZoom">-</span></span>' +
+      '<span><span class="label">ViewBox:</span><span class="value" id="statusViewBox">-</span></span>';
     container.appendChild(statusBar);
 
     // Raw states bar — debug overlay, stacked above status bar
@@ -1121,6 +1123,11 @@ class Application {
     });
     this.#statesMachine.on('historyChange', () => this.#updateHistoryButtons());
 
+    // Update status bar on zoom/pan
+    this.#drawArea.svgElement.addEventListener('touchend', () => this.#updateStatusBar());
+    this.#touchOverlay.engine.on('pinchEnd', () => this.#updateStatusBar());
+    this.#touchOverlay.engine.on('catchDrop', () => this.#updateStatusBar());
+
     // TNT state events
     this.#touchOverlay.engine.on('stateChange', (e) => this.#updateTntState(e.state));
 
@@ -1172,6 +1179,8 @@ class Application {
     const statusColor = document.getElementById('statusColor');
     const statusSize = document.getElementById('statusSize');
     const statusSelected = document.getElementById('statusSelected');
+    const statusZoom = document.getElementById('statusZoom');
+    const statusViewBox = document.getElementById('statusViewBox');
 
     if (statusMode) statusMode.textContent = this.#statesMachine.mode;
     if (statusTool) statusTool.textContent = this.#statesMachine.currentTool;
@@ -1183,6 +1192,16 @@ class Application {
     }
     const statusSelectables = document.getElementById('statusSelectables');
     if (statusSelectables) statusSelectables.textContent = this.#statesMachine.selectables;
+
+    // Zoom and viewBox
+    if (statusZoom) {
+      const z = this.#drawArea.zoom;
+      statusZoom.textContent = `${(z * 100).toFixed(0)}%`;
+    }
+    if (statusViewBox) {
+      const vb = this.#drawArea.viewBox;
+      statusViewBox.textContent = `${vb.x} ${vb.y} ${vb.w}×${vb.h}`;
+    }
   }
 }
 
