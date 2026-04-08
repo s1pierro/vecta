@@ -1388,26 +1388,39 @@ class CorePanel {
   }
 
   // ── Private helpers ──
+  /**
+   * Sync topbar tool button active states with internal state.
+   */
+  #syncToolButtons() {
+    const tool = this.#stateMachine.currentTool;
+    const selectMode = this.#selectionManager.selectMode;
+
+    // Draw: active when tool === 'draw'
+    const drawBtn = document.getElementById('toolDraw');
+    if (drawBtn) drawBtn.classList.toggle('active', tool === 'draw');
+
+    // Select: active when tool === 'select' && selectMode === 'object'
+    const selectBtn = document.getElementById('toolSelect');
+    if (selectBtn) selectBtn.classList.toggle('active', tool === 'select' && selectMode === SelectMode.OBJECT);
+
+    // Nodes: active when tool === 'select' && selectMode === 'node'
+    const nodesBtn = document.getElementById('toolNodes');
+    if (nodesBtn) nodesBtn.classList.toggle('active', tool === 'select' && selectMode === SelectMode.NODE);
+  }
+
   #selectTool(tool) {
-    document.querySelectorAll('.panel-tool-btn').forEach(b => b.classList.remove('active'));
-    const btn = document.querySelector(`.panel-tool-btn[data-tool="${tool}"]`);
-    if (btn) btn.classList.add('active');
     this.#stateMachine.currentTool = tool;
     const modeMap = { draw: 'drawingTool', select: 'selection', pan: 'drawingTool' };
     this.#stateMachine.setMode(modeMap[tool] || 'drawingTool');
-    const selectModeBtn = document.querySelector('#selectModeBtn');
-    if (selectModeBtn) selectModeBtn.style.display = tool === 'select' ? '' : 'none';
+    this.#syncToolButtons();
   }
 
   #toggleSelectMode() {
     const current = this.#selectionManager.selectMode;
     const next = current === SelectMode.OBJECT ? SelectMode.NODE : SelectMode.OBJECT;
     this.#selectionManager.setSelectMode(next);
-    const btn = document.querySelector('#selectModeBtn');
-    if (btn) {
-      btn.classList.toggle('active', next === SelectMode.NODE);
-      btn.title = next === SelectMode.NODE ? 'Mode sélection: nœuds' : 'Mode sélection: objets';
-    }
+    this.#syncToolButtons();
+    this.#syncNodeTypeButtons();
   }
 
   #selectColor(color) {
@@ -1460,6 +1473,50 @@ class CorePanel {
       }
     }
     this.#syncNodeTypeSelector();
+    this.#syncNodeTypeButtons();
+  }
+
+  /**
+   * Sync node type buttons in topbar/toolSelector with selected nodes.
+   */
+  #syncNodeTypeButtons() {
+    const path = this.#selectionManager.selectedPath;
+    const nodes = this.#selectionManager.selectedNodes;
+
+    const typeMap = { corner: 'tnCorner', smooth: 'tnSmooth', symmetric: 'tnSymmetric', auto: 'tnAuto' };
+
+    // Reset all
+    for (const id of Object.values(typeMap)) {
+      const btn = document.getElementById(id);
+      if (btn) btn.classList.remove('active');
+    }
+
+    if (!path || nodes.length === 0) return;
+
+    // Determine the dominant node type among selected nodes
+    const counts = { corner: 0, smooth: 0, symmetric: 0, auto: 0 };
+    nodes.forEach(i => {
+      if (i < 0 || i >= path.points.length) return;
+      const p = path.points[i];
+      if (p.auto) counts.auto++;
+      else if (p.symmetric) counts.symmetric++;
+      else if (p.smooth) counts.smooth++;
+      else counts.corner++;
+    });
+
+    // Find dominant type
+    let dominant = 'corner';
+    let maxCount = 0;
+    for (const [type, count] of Object.entries(counts)) {
+      if (count > maxCount) { maxCount = count; dominant = type; }
+    }
+
+    // Activate dominant button
+    const activeId = typeMap[dominant];
+    if (activeId) {
+      const btn = document.getElementById(activeId);
+      if (btn) btn.classList.add('active');
+    }
   }
 
   #syncNodeTypeSelector() {
