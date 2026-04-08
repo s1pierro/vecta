@@ -1268,6 +1268,16 @@ class CorePanel {
     const sep = document.createElement('div');
     sep.className = 'topbar-sep';
 
+    // ── Tool buttons defined here, appended after redo and before window list ──
+    const toolSep = document.createElement('div');
+    toolSep.className = 'topbar-sep';
+
+    const toolDefs = [
+      { id: 'toolDraw', tool: 'draw', icon: 'M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z', label: 'Dessin' },
+      { id: 'toolSelect', tool: 'select', icon: 'M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z', label: 'Sélection' },
+      { id: 'toolPan', tool: 'pan', icon: 'M5 9l-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20', label: 'Pan' }
+    ];
+
     // GNOME2-style horizontal window list
     const winList = document.createElement('div');
     winList.id = 'topbarWinList';
@@ -1278,6 +1288,19 @@ class CorePanel {
     bar.appendChild(undoBtn);
     bar.appendChild(redoBtn);
     bar.appendChild(sep);
+    // Tool buttons
+    toolDefs.forEach((td, i) => {
+      const btn = document.createElement('button');
+      btn.id = td.id;
+      btn.className = 'topbar-tool-btn' + (i === 0 ? ' active' : '');
+      btn.dataset.tool = td.tool;
+      btn.title = td.label;
+      btn.innerHTML = `<svg viewBox="0 0 24 24" style="width:16px;height:16px"><path d="${td.icon}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+      btn.addEventListener('click', () => this.#selectTool(td.tool));
+      bar.appendChild(btn);
+    });
+    bar.appendChild(toolSep);
+    // Window list
     bar.appendChild(winList);
     panel.appendChild(bar);
 

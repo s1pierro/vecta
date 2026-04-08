@@ -959,45 +959,6 @@ class Application {
       const body = document.createElement('div');
       body.style.cssText = 'display:flex;flex-direction:column;gap:0;overflow-y:auto;max-height:70vh;';
 
-      // ── TOOLS section
-      const toolsSection = document.createElement('div');
-      toolsSection.style.cssText = 'padding:8px;';
-      toolsSection.innerHTML = '<div style="color:rgba(255,255,255,0.35);font-size:0.65em;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Outils</div>';
-      const toolsRow = document.createElement('div');
-      toolsRow.style.cssText = 'display:flex;gap:4px;';
-      const toolDefs = [
-        { id: 'toolDraw', tool: 'draw', icon: 'M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z', label: 'Dessin' },
-        { id: 'toolSelect', tool: 'select', icon: 'M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z', label: 'Sélection' },
-        { id: 'toolPan', tool: 'pan', icon: 'M5 9l-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20', label: 'Pan' }
-      ];
-      toolDefs.forEach((td, i) => {
-        const btn = document.createElement('button');
-        btn.id = td.id;
-        btn.className = 'panel-tool-btn' + (i === 0 ? ' active' : '');
-        btn.dataset.tool = td.tool;
-        btn.title = td.label;
-        btn.style.cssText = `flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 4px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:4px;color:rgba(255,255,255,0.5);cursor:pointer;transition:all 0.15s;`;
-        btn.innerHTML = `<svg viewBox="0 0 24 24" style="width:18px;height:18px;fill:currentColor"><path d="${td.icon}"/></svg><span style="font-size:0.6em;">${td.label}</span>`;
-        btn.addEventListener('click', () => this.#corePanel.selectTool(td.tool));
-        toolsRow.appendChild(btn);
-      });
-      toolsSection.appendChild(toolsRow);
-
-      // Select mode toggle
-      const selectModeBtn = document.createElement('button');
-      selectModeBtn.id = 'selectModeBtn';
-      selectModeBtn.style.cssText = 'display:none;width:100%;margin-top:6px;padding:5px 8px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.12);border-radius:4px;color:rgba(255,255,255,0.4);cursor:pointer;font-size:0.7em;text-align:left;';
-      selectModeBtn.title = 'Mode sélection: objets';
-      selectModeBtn.innerHTML = '<svg viewBox="0 0 24 24" style="width:12px;height:12px;fill:currentColor;vertical-align:middle;margin-right:4px;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>Mode nœuds';
-      selectModeBtn.addEventListener('click', () => this.#corePanel.toggleSelectMode());
-      toolsSection.appendChild(selectModeBtn);
-      body.appendChild(toolsSection);
-
-      // ── Separator
-      const sep1 = document.createElement('div');
-      sep1.style.cssText = 'height:1px;background:rgba(255,255,255,0.08);';
-      body.appendChild(sep1);
-
       // ── PROPERTIES section (object/path properties)
       const propsSection = document.createElement('div');
       propsSection.id = 'toolPropsSection';
