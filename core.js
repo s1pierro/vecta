@@ -2,14 +2,12 @@ const APP_NAME = 'Vecta';
 const APP_VERSION = '0.1';
 
 /**
- * State — a declarative definition of an application state.
+ * State — atomic, declarative application state definition.
  *
- * Describes:
- * - Identity (name, type, family, tags)
- * - Mutual exclusion via exclusiveFields
- * - Activation / maintain / deactivation conditions
- * - Lifecycle hooks (onEnter, onExit, onMaintain)
- * - Priority for conflict resolution
+ * All behavior is described purely as data:
+ * - Events that trigger/activate/quit
+ * - Constraints (required/unallowed states, transitions, guard)
+ * - Metadata (tags, type, family)
  */
 class State {
   #name;
@@ -17,12 +15,13 @@ class State {
   #family;
   #exclusiveFields;
   #priority;
-  #activationCondition;
-  #maintainCondition;
-  #deactivationCondition;
-  #onEnter;
-  #onExit;
-  #onMaintain;
+  #triggerEvents;
+  #activateEvents;
+  #quitEvents;
+  #requiredStates;
+  #unallowedStates;
+  #transitions;
+  #guard;
   #tags;
   #meta;
 
@@ -34,30 +33,20 @@ class State {
     this.#exclusiveFields = Array.isArray(config.exclusiveFields) ? [...config.exclusiveFields] : [];
     this.#priority = typeof config.priority === 'number' ? config.priority : 0;
 
-    // Conditions — accept fn strings or null
-    this.#activationCondition = this.#parseCondition(config.activationCondition);
-    this.#maintainCondition = this.#parseCondition(config.maintainCondition);
-    this.#deactivationCondition = this.#parseCondition(config.deactivationCondition);
+    // Events
+    this.#triggerEvents = Array.isArray(config.triggerEvents) ? [...config.triggerEvents] : [];
+    this.#activateEvents = Array.isArray(config.activateEvents) ? [...config.activateEvents] : [];
+    this.#quitEvents = Array.isArray(config.quitEvents) ? [...config.quitEvents] : [];
 
-    // Lifecycle hooks
-    this.#onEnter = config.onEnter || null;
-    this.#onExit = config.onExit || null;
-    this.#onMaintain = config.onMaintain || null;
+    // Constraints
+    this.#requiredStates = Array.isArray(config.requiredStates) ? [...config.requiredStates] : [];
+    this.#unallowedStates = Array.isArray(config.unallowedStates) ? [...config.unallowedStates] : [];
+    this.#transitions = config.transitions || {};
+    this.#guard = config.guard || null;
 
     // Metadata
     this.#tags = Array.isArray(config.tags) ? [...config.tags] : [];
     this.#meta = config.meta || {};
-  }
-
-  #parseCondition(cond) {
-    if (!cond) return null;
-    if (typeof cond === 'function') return cond;
-    if (typeof cond === 'string' && cond.trim()) {
-      try {
-        return new Function('c', `return (${cond})(c)`);
-      } catch { return null; }
-    }
-    return null;
   }
 
   // ── Getters ──
@@ -66,41 +55,28 @@ class State {
   get family() { return this.#family; }
   get exclusiveFields() { return [...this.#exclusiveFields]; }
   get priority() { return this.#priority; }
+  get triggerEvents() { return [...this.#triggerEvents]; }
+  get activateEvents() { return [...this.#activateEvents]; }
+  get quitEvents() { return [...this.#quitEvents]; }
+  get requiredStates() { return [...this.#requiredStates]; }
+  get unallowedStates() { return [...this.#unallowedStates]; }
+  get transitions() { return { ...this.#transitions }; }
+  get guard() { return this.#guard; }
   get tags() { return [...this.#tags]; }
   get meta() { return { ...this.#meta }; }
 
-  canActivate(ctx) {
-    return this.#activationCondition ? this.#activationCondition(ctx) : true;
+  /** Check if a given event can trigger this state. */
+  matchesTrigger(eventName) {
+    return this.#triggerEvents.includes(eventName);
   }
 
-  shouldMaintain(ctx) {
-    return this.#maintainCondition ? this.#maintainCondition(ctx) : true;
-  }
-
-  shouldDeactivate(ctx) {
-    return this.#deactivationCondition ? this.#deactivationCondition(ctx) : false;
-  }
-
-  enter(ctx) {
-    if (this.#onEnter) this.#onEnter(ctx);
-  }
-
-  exit(ctx) {
-    if (this.#onExit) this.#onExit(ctx);
-  }
-
-  maintain(ctx, dt) {
-    if (this.#onMaintain) this.#onMaintain(ctx, dt);
-  }
-
+  /** Check if this state shares an exclusive field with another state. */
   getExclusiveConflicts(other) {
     if (!(other instanceof State)) return [];
     return this.#exclusiveFields.filter(f => other.exclusiveFields.includes(f));
   }
 
-  /**
-   * Return a plain serializable representation (for storage/export).
-   */
+  /** Return a plain serializable representation (for storage/export). */
   toJSON() {
     return {
       name: this.#name,
@@ -108,33 +84,21 @@ class State {
       family: this.#family,
       exclusiveFields: this.#exclusiveFields,
       priority: this.#priority,
+      triggerEvents: this.#triggerEvents,
+      activateEvents: this.#activateEvents,
+      quitEvents: this.#quitEvents,
+      requiredStates: this.#requiredStates,
+      unallowedStates: this.#unallowedStates,
+      transitions: this.#transitions,
+      guard: this.#guard,
       tags: this.#tags,
-      meta: this.#meta,
-      activationCondition: null,
-      maintainCondition: null,
-      deactivationCondition: null
+      meta: this.#meta
     };
   }
 
-  /**
-   * Return a raw definition including condition strings for editing.
-   */
+  /** Return a full definition for editing. */
   toDefinition() {
-    return {
-      name: this.#name,
-      type: this.#type,
-      family: this.#family,
-      exclusiveFields: this.#exclusiveFields,
-      priority: this.#priority,
-      tags: this.#tags,
-      meta: this.#meta,
-      activationCondition: null,
-      maintainCondition: null,
-      deactivationCondition: null,
-      onEnter: null,
-      onExit: null,
-      onMaintain: null
-    };
+    return { ...this.toJSON() };
   }
 }
 
@@ -650,25 +614,39 @@ class StateMachine {
     for (const def of definitions) {
       this.#registerFromDefinition(def);
     }
-    this.#attachStateHooks();
+    this.#setupTriggerListeners();
     // Activate defaults: drawingTool + draw
-    this.activateState('drawingTool', this.state);
-    this.activateState('draw', this.state);
+    this.activateState('drawingTool');
+    this.activateState('draw');
   }
 
   /**
-   * Attach event-emitting hooks to registered states.
+   * Set up event listeners for each state's triggerEvents.
+   * When a trigger event fires, attempt to activate that state.
    */
-  #attachStateHooks() {
+  #setupTriggerListeners() {
+    // Clean up old listeners if any
+    if (this._triggerCleanup) this._triggerCleanup();
+    this._triggerCleanup = () => {};
+
+    const listeners = [];
+
     for (const state of this.#stateRegistry.values()) {
-      // Override enter to emit events
-      const origEnter = state.enter.bind(state);
-      state._onEnter = (ctx) => {
-        origEnter(ctx);
-        if (state.type === 'mode') this.#emit('modeChange', state.name);
-        if (state.type === 'tool') this.#emit('toolChange', state.name);
-      };
+      for (const trigger of state.triggerEvents) {
+        const handler = () => {
+          this.activateState(state.name);
+        };
+        this.on(trigger, handler);
+        listeners.push({ event: trigger, handler });
+      }
     }
+
+    this._triggerCleanup = () => {
+      for (const { event, handler } of listeners) {
+        this.off(event, handler);
+      }
+      listeners.length = 0;
+    };
   }
 
   /**
@@ -696,10 +674,9 @@ class StateMachine {
    * Saves to localStorage.
    */
   setStateDefinitions(definitions) {
-    // Preserve lifecycle hooks from existing states
-    const hooks = new Map();
-    for (const s of this.#stateRegistry.values()) {
-      hooks.set(s.name, { onEnter: s._onEnter, onExit: s._onExit, onMaintain: s._onMaintain });
+    // Deactivate all first
+    for (const name of [...this.#activeStates]) {
+      this.deactivateState(name);
     }
 
     this.#stateRegistry.clear();
@@ -708,10 +685,11 @@ class StateMachine {
       this.#registerFromDefinition(def);
     }
     StateLoader.save(definitions);
+    this.#setupTriggerListeners();
 
     // Re-activate defaults
-    this.activateState('drawingTool', this.state);
-    this.activateState('draw', this.state);
+    this.activateState('drawingTool');
+    this.activateState('draw');
   }
 
   // ── State registry API ──
@@ -755,63 +733,103 @@ class StateMachine {
   }
 
   /**
-   * Try to activate a state. Enforces exclusivity and conditions.
-   * @param {string} name
-   * @param {object} ctx — context snapshot
-   * @returns {boolean} — true if activated
+   * Check if transition to a state is allowed.
+   * Verifies: requiredStates, unallowedStates, transitions, exclusiveFields.
    */
-  activateState(name, ctx = this.state) {
+  canTransitionTo(name) {
+    const state = this.#stateRegistry.get(name);
+    if (!state) return false;
+
+    // Check required states are active
+    for (const req of state.requiredStates) {
+      if (!this.#activeStates.has(req)) return false;
+    }
+
+    // Check no unallowed states are active
+    for (const disallowed of state.unallowedStates) {
+      if (this.#activeStates.has(disallowed)) return false;
+    }
+
+    // Check exclusive fields
+    for (const activeName of this.#activeStates) {
+      const activeState = this.#stateRegistry.get(activeName);
+      if (!activeState) continue;
+      const conflicts = state.getExclusiveConflicts(activeState);
+      if (conflicts.length > 0) {
+        // Check if transition is explicitly allowed
+        if (state.transitions[activeName] !== true) return false;
+      }
+    }
+
+    return true;
+  }
+
+  /**
+   * Try to activate a state using atomic constraints.
+   * @param {string} name
+   * @returns {boolean}
+   */
+  activateState(name) {
     const state = this.#stateRegistry.get(name);
     if (!state) {
       console.warn(`State "${name}" not registered`);
       return false;
     }
 
-    // Check activation condition
-    if (!state.canActivate(ctx)) {
-      return false;
-    }
+    // Check canTransitionTo
+    if (!this.canTransitionTo(name)) return false;
 
-    // Check exclusivity conflicts
-    const conflicts = [];
-    for (const activeName of this.#activeStates) {
+    // Deactivate conflicting states (same exclusive fields)
+    for (const activeName of [...this.#activeStates]) {
       const activeState = this.#stateRegistry.get(activeName);
       if (!activeState) continue;
-      const fields = state.getExclusiveConflicts(activeState);
-      if (fields.length > 0) {
-        conflicts.push({ name: activeName, fields });
-      }
-    }
-
-    // Resolve conflicts: deactivate lower-priority states
-    for (const conflict of conflicts) {
-      const other = this.#stateRegistry.get(conflict.name);
-      if (state.priority >= other.priority) {
-        this.deactivateState(conflict.name, ctx);
-      } else {
-        return false; // can't override higher priority
+      const conflicts = state.getExclusiveConflicts(activeState);
+      if (conflicts.length > 0) {
+        if (state.priority >= activeState.priority) {
+          this.deactivateState(activeName);
+        } else {
+          return false;
+        }
       }
     }
 
     // Already active?
     if (this.#activeStates.has(name)) return true;
 
-    // Enter new state
+    // Deactivate states in unallowedStates list (if somehow they slipped through)
+    for (const disallowed of state.unallowedStates) {
+      this.deactivateState(disallowed);
+    }
+
+    // Activate
     this.#activeStates.add(name);
-    state.enter(ctx);
+
+    // Emit activateEvents
+    for (const evt of state.activateEvents) {
+      const [eventType, ...rest] = evt.split(':');
+      this.#emit(eventType, rest.join(':') || name);
+    }
+
     return true;
   }
 
   /**
    * Deactivate a state.
    * @param {string} name
-   * @param {object} ctx
    * @returns {boolean}
    */
-  deactivateState(name, ctx = this.state) {
+  deactivateState(name) {
     if (!this.#activeStates.has(name)) return true;
     const state = this.#stateRegistry.get(name);
-    if (state) state.exit(ctx);
+
+    // Emit quitEvents
+    if (state) {
+      for (const evt of state.quitEvents) {
+        const [eventType, ...rest] = evt.split(':');
+        this.#emit(eventType, rest.join(':') || name);
+      }
+    }
+
     this.#activeStates.delete(name);
     return true;
   }
@@ -973,6 +991,11 @@ class StateMachine {
   on(event, callback) {
     if (!this.#listeners[event]) this.#listeners[event] = [];
     this.#listeners[event].push(callback);
+  }
+
+  off(event, callback) {
+    if (!this.#listeners[event]) return;
+    this.#listeners[event] = this.#listeners[event].filter(cb => cb !== callback);
   }
 
   #emit(event, data) {
@@ -1405,8 +1428,9 @@ class CorePanel {
   #selectTool(tool, mode) {
     if (mode) {
       this.#stateMachine.setMode(mode);
+    } else {
+      this.#stateMachine.currentTool = tool;
     }
-    this.#stateMachine.currentTool = tool;
     this.#syncToolButtons();
 
     // When entering nodeEdit mode, ensure selection mode is on nodes
