@@ -585,6 +585,10 @@ class StateMachine {
   #stateRegistry = new Map();   // name -> State
   #activeStates = new Set();    // names of currently active states
 
+  // Event log
+  #eventLog = [];
+  #maxEventLog = 200;
+
   constructor() {
     this.#state = {
       mode: 'drawingTool',
@@ -999,10 +1003,23 @@ class StateMachine {
   }
 
   #emit(event, data) {
+    // Log event (circular buffer, max 200)
+    const entry = {
+      event,
+      data: data !== undefined && data !== null ? (typeof data === 'object' ? JSON.stringify(data) : String(data)) : '',
+      time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    };
+    this.#eventLog.push(entry);
+    if (this.#eventLog.length > this.#maxEventLog) this.#eventLog.shift();
+    this.#emit('eventLog', entry);
+
     if (this.#listeners[event]) {
       this.#listeners[event].forEach(cb => cb(data));
     }
   }
+
+  get eventLog() { return [...this.#eventLog]; }
+  clearEventLog() { this.#eventLog = []; }
 
   #createSnapshot() {
     return {

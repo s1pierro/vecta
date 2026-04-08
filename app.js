@@ -630,6 +630,68 @@ class Application {
       height: '50vh'
     });
 
+    // Event log SubWindow
+    const eventLogContentFn = () => {
+      const body = document.createElement('div');
+      body.style.cssText = 'display:flex;flex-direction:column;gap:4px;padding:6px;';
+
+      const headerRow = document.createElement('div');
+      headerRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;';
+      headerRow.innerHTML = '<span style="color:rgba(255,255,255,0.35);font-size:0.65em;text-transform:uppercase;letter-spacing:1px;">Event Log</span>';
+      const clearBtn = document.createElement('button');
+      clearBtn.style.cssText = 'padding:2px 8px;background:rgba(255,80,80,0.1);border:1px solid rgba(255,80,80,0.2);border-radius:3px;color:#ff5252;cursor:pointer;font-size:0.6em;';
+      clearBtn.textContent = 'Clear';
+      clearBtn.addEventListener('click', () => {
+        this.#statesMachine.clearEventLog();
+        logContainer.innerHTML = '';
+      });
+      headerRow.appendChild(clearBtn);
+      body.appendChild(headerRow);
+
+      const logContainer = document.createElement('div');
+      logContainer.id = 'eventLogContainer';
+      logContainer.style.cssText = 'flex:1;overflow-y:auto;font-family:monospace;font-size:0.65em;max-height:60vh;';
+      body.appendChild(logContainer);
+
+      // Populate initial log
+      const renderEntry = (entry) => {
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;gap:6px;padding:2px 4px;border-bottom:1px solid rgba(255,255,255,0.03);';
+        const time = document.createElement('span');
+        time.style.cssText = 'color:rgba(255,255,255,0.2);flex-shrink:0;';
+        time.textContent = entry.time;
+        const evt = document.createElement('span');
+        evt.style.cssText = 'color:#4fc3f7;flex-shrink:0;';
+        evt.textContent = entry.event;
+        const dat = document.createElement('span');
+        dat.style.cssText = 'color:rgba(255,255,255,0.4);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+        dat.textContent = entry.data;
+        row.appendChild(time);
+        row.appendChild(evt);
+        row.appendChild(dat);
+        logContainer.appendChild(row);
+      };
+
+      this.#statesMachine.eventLog.forEach(renderEntry);
+
+      // Subscribe to new events
+      this.#statesMachine.on('eventLog', (entry) => {
+        if (entry) renderEntry(entry);
+      });
+
+      return body;
+    };
+
+    this.#subWindowManager.addWindow('eventLog', {
+      id: 'eventLog',
+      title: 'event-log',
+      content: eventLogContentFn,
+      left: '45vw',
+      top: '10vh',
+      width: '300px',
+      height: 'auto'
+    });
+
     // Color picker SubWindow with integrated color selector
     const COLOR_STORAGE_KEY = 'vectux_colors';
 
